@@ -1,0 +1,588 @@
+% -*- coding: utf-8 -*-
+@require: option
+@require: list
+@require: math
+
+type number-of-chars-or-length = 
+  | Length of length
+  | NumberOfChars of float
+
+type kihon-hanmen-horizontal = 
+  | HorizontalAuto
+  | HorizontalCenter of number-of-chars-or-length
+  | Gutter of (|
+      block-length : number-of-chars-or-length;
+      gutter : number-of-chars-or-length;
+   |)
+  | GutterFore-edge of (|
+      gutter : number-of-chars-or-length;
+      fore-edge : number-of-chars-or-length;
+    |)
+
+type kihon-hanmen-vertical =
+   | VerticalAuto
+   | VerticalCenter of number-of-chars-or-length
+   | Top of (|
+       line-length : number-of-chars-or-length;
+       top-space : number-of-chars-or-length;
+     |)
+   | TopBottom of (|
+       top-space : number-of-chars-or-length;
+       bottom-space : number-of-chars-or-length;
+     |)
+
+type config-cjkfont =
+  | CJKFont-preset-ipaex
+  | CJKFont of (|
+    mincho : string * float * float;
+    gothic : string * float * float;
+  |)
+
+type config-latinfont = 
+  | LatinFont-preset-lmodern
+  | LatinFont of (|
+    roman : string * float * float;
+    italic : string * float * float;
+    sans : string * float * float;
+  |)
+
+type config = (|
+  twoside : bool;
+  paper-size : page;
+  horizontal-layout : kihon-hanmen-horizontal;
+  vertical-layout : kihon-hanmen-vertical;
+  header-sep : number-of-chars-or-length;
+  header-height : number-of-chars-or-length;
+  line-gap : length;
+  font-size : length;
+  cjk-font : config-cjkfont;
+  latin-font : config-latinfont;
+|)
+
+type nfss = 
+  | Current
+  | CurrentType of number-of-chars-or-length
+  | Roman of number-of-chars-or-length
+  | Sans of number-of-chars-or-length
+  | Italic of number-of-chars-or-length
+  | Font of number-of-chars-or-length * (|
+    cjk : string * float * float;
+    latin : string * float * float;
+  |)
+
+type blockheading-gyodori = 
+  | GyodoriCenter of float
+  | BeforeLines of float * float
+  | BeforeLength of float * length
+  | AfterLines of float * float
+  | AfterLength of float * length
+  | Absolute of length * length
+
+type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * number-of-chars-or-length
+
+module JLReq : sig
+  val default-config : config
+
+  val document : 'a -> config ?-> block-text -> document
+    constraint 'a :: (|
+      title : inline-text;
+      author : inline-text;
+      show-toc : bool;
+      show-title : bool;
+    |)
+  direct +p : [inline-text] block-cmd
+  direct +part : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
+  direct +section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
+  direct +subsection : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
+  
+  direct \ref : [string] inline-cmd
+  direct \ref-page : [string] inline-cmd
+
+  val blockheading : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+    constraint 'a :: (|
+      font : nfss;
+      label-font : nfss;
+      subtitle-font : nfss;
+      gyodori : blockheading-gyodori;
+      label-format : int -> inline-text;
+      reference-label-format : int -> string;
+      subtitle-format : inline-text -> inline-text;
+      indent : number-of-chars-or-length;
+      end-indent : number-of-chars-or-length;
+      after-label-space : number-of-chars-or-length;
+      % ラベル頭起点にするならば一つ目をtrueにする．
+      second-heading-text-indent : bool * number-of-chars-or-length;
+      subtitle-indent : blockheading-subtitle-indent;
+      reset-counters : (int ref) list;
+    |)
+  val theorem-scheme : 'a -> inline-text -> int ref -> context -> string ?-> inline-text ?-> inline-text -> block-boxes
+    constraint 'a :: (|
+      before-space : length;
+      after-space : length;
+      font : nfss;
+      heading-font : nfss;
+      reference-label-format : int -> string;
+      after-label-space : number-of-chars-or-length;
+    |)
+
+end = struct
+  let default-config = (|
+    twoside = false;
+    paper-size = A4Paper;
+    horizontal-layout = HorizontalAuto;
+    vertical-layout = VerticalAuto;
+    header-sep  = NumberOfChars(1.0);
+    header-height = NumberOfChars(1.0);
+    font-size = 10pt;
+    line-gap = 7pt;
+    cjk-font = CJKFont-preset-ipaex;
+    latin-font = LatinFont-preset-lmodern;
+  |)
+  
+  let paper-size-to-width-height ps = 
+    match ps with 
+      | A0Paper -> (841mm,1189mm)
+      | A1Paper -> (594mm,841mm)
+      | A2Paper -> (420mm,594mm)
+      | A3Paper -> (297mm,420mm)
+      | A4Paper -> (210mm,297mm)
+      | A5Paper -> (148mm,210mm)
+      | USLegal -> (8.5inch,14inch)
+      | USLetter -> (8.5inch,11inch)
+      | UserDefinedPaper(w,h) -> (w,h)
+  
+  %. 相互参照系
+  let output-cross-reference ctx l =
+    let ref-txt = 
+      match (get-cross-reference l) with
+      | None -> {?}
+      | Some(s) -> embed-string s
+    in
+    read-inline ctx ref-txt
+  let-inline ctx \ref l = output-cross-reference ctx (l ^ `:num`)
+  let-inline ctx \ref-page l = output-cross-reference ctx (l ^ `:page`)
+  
+%  let-rec string-to-int s =
+%    let len = string-length s in
+%    if len == 0 then Some(0) else
+%      let last-char = string-sub s (len - 1) 1 in
+%      let n = 
+%        match last-char with
+%        |`0` -> Some(0)
+%        |`1` -> Some(1)
+%        |`2` -> Some(2)
+%        |`3` -> Some(3)
+%        |`4` -> Some(4)
+%        |`5` -> Some(5)
+%        |`6` -> Some(6)
+%        |`7` -> Some(7)
+%        |`8` -> Some(8)
+%        |`9` -> Some(9)
+%        |_ -> None
+%      in
+%      match n with 
+%      |None -> None
+%      |Some(m) ->
+%        let k = string-to-int (string-sub s 0 (len - 1)) in
+%        match k with
+%        |None -> None
+%        |Some(l) -> Some(10 * l + m)
+%
+%  let-mutable ref-auto-reference-number <- 0
+%  let get-auto-reference-label = `jlreq-auto-reference:` ^ (arabic !ref-auto-reference-number)
+%  let current-page =
+%    let () = ref-auto-reference-number <- !ref-auto-reference-number + 1 in
+%    let opt = get-cross-reference get-auto-reference-label in
+%    let curpage = 
+%      match opt with
+%      |None -> None
+%      |Some(s) -> string-to-int s
+%    in
+%    let hookfunc pbinfo point = register-cross-reference get-auto-reference-label (arabic pbinfo#page-number) in
+%    let box = hook-page-break hookfunc in
+%    (curpage,box)
+  
+  %. 基本版面保持
+  let-mutable ref-kihonhanmen <- (|
+    line-gap = 7pt;
+  |)
+  %. フォント
+  let-mutable ref-font <- (10pt,(|
+    cjk = (|mincho = (`ipaexm`,1.0,0.0); gothic = (`ipaexg`,1.0,0.0);|);
+    latin = (|roman = (`lmroman`,1.0,0.0); italic = (`lmroman-it`,1.0,0.0); sans = (`lmroman-b`,1.0,0.0);|);
+  |))
+  let select-font f ctx =
+    let (font-size,font) = !ref-font in
+    let to-length ncl = 
+      match ncl with
+      | Length(l) -> l
+      | NumberOfChars(n) -> font-size *' n
+    in
+    match f with
+    | Current -> ctx
+    | CurrentType(n) -> ctx
+      |> set-font-size (to-length n)
+    | Roman(n) -> ctx
+      |> set-font-size (to-length n)
+      |> set-font Kana font#cjk#mincho
+      |> set-font HanIdeographic font#cjk#mincho
+      |> set-font Latin font#latin#roman
+    | Sans(n) -> ctx
+      |> set-font-size (to-length n)
+      |> set-font Kana font#cjk#gothic
+      |> set-font HanIdeographic font#cjk#gothic
+      |> set-font Latin font#latin#sans
+    | Italic(n) -> ctx
+      |> set-font-size (to-length n)
+      |> set-font Kana font#cjk#mincho
+      |> set-font HanIdeographic font#cjk#mincho
+      |> set-font Latin font#latin#italic
+    | Font(size,f) -> ctx
+      |> set-font-size (to-length size)
+      |> set-font Kana f#cjk
+      |> set-font HanIdeographic f#cjk
+      |> set-font Latin f#latin
+  
+  %. フロート？
+  let-mutable ref-float-boxes <- []
+  let height-of-float-boxes pageno =
+    (!ref-float-boxes) |> List.fold-left (fun h (pn, bb) -> (
+      if pn < pageno then h +' (get-natural-length bb) else h
+    )) 0pt
+    
+  
+  %. 別行見出し
+  let blockheading config counter ctx ?:label ?:runninghead ?:subtitle heading block =
+    let (font-size,_) = !ref-font in
+    let to-length l = match l with 
+      | NumberOfChars(n) -> font-size *' n
+      | Length(ll) -> ll
+    in
+    let ctxheading = ctx
+      |> select-font config#font
+    in
+    let () = counter <- !counter + 1 in
+    let-rec reset-counters l =
+      match l with
+      | [] -> ()
+      | x :: xs -> 
+        let () = x <- 0 in
+        reset-counters xs
+    in
+    let () = reset-counters config#reset-counters in
+    let hookbox = 
+      match label with
+      | None -> inline-nil
+      | Some(l) -> 
+        let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
+        let hookfunc pbinfo pt =
+          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+        in
+        hook-page-break hookfunc
+    in
+    let label-box = hookbox ++ (read-inline (select-font config#label-font ctxheading) (config#label-format !counter)) in
+    let (label-length,_,_) = get-natural-metrics label-box in
+    let heading-text-indent = 
+      let (fromlabel,len) = config#second-heading-text-indent in
+      if fromlabel then
+        to-length len
+      else
+        label-length +' (to-length config#after-label-space) +' (to-length len)
+    in
+    let get-pads indent end-indent = (indent, end-indent, 0pt, 0pt) in
+    let decos =
+      let deco _ _ _ _ = [] in
+      (deco, deco, deco, deco)
+    in
+    let label-heading-box = 
+      (inline-skip (0pt -' heading-text-indent)) ++ label-box ++ (inline-skip (to-length config#after-label-space)) ++ (read-inline ctxheading heading)
+    in
+    let line-gap =
+      let k = !ref-kihonhanmen in
+      k#line-gap
+    in
+    let output c =
+      let ctxa = set-paragraph-margin line-gap line-gap c in
+      let (first-boxes,second-boxes) = % inline-box, block-box
+        match subtitle with
+        | None -> (label-heading-box,block-nil)
+        | Some(subt) ->
+          let subtitle-txt = config#subtitle-format subt in
+          match config#subtitle-indent with
+          | SubTitleNoBreak ->
+            (label-heading-box ++ (read-inline (select-font config#subtitle-font ctxa) subtitle-txt),block-nil)
+          | SubTitleIndent(fromlabel,l) ->
+            let len = to-length l in
+            let outputsubtitle cc =
+              line-break false false (select-font config#subtitle-font cc) ((read-inline (select-font config#subtitle-font cc) subtitle-txt) ++ inline-fil)
+            in
+            let subtitle-indent = if fromlabel then len else len +' label-length +' (to-length config#after-label-space) in
+            (label-heading-box, block-frame-breakable ctxa (get-pads subtitle-indent 0pt) decos outputsubtitle)
+      in
+      let outputheading cc =
+        line-break false false cc (first-boxes ++ inline-fil)
+      in
+      (
+        block-frame-breakable ctxa (get-pads heading-text-indent 0pt) decos outputheading
+      ) +++ second-boxes
+    in
+    let heading-blockbox = block-frame-breakable (set-paragraph-margin 0pt 0pt ctxheading) (get-pads (to-length config#indent) (to-length config#end-indent)) decos output in
+    let (before-space,after-space) = 
+      let baselineskip = font-size +' line-gap in
+      match config#gyodori with
+      | GyodoriCenter(l) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len -' line-gap,len -' line-gap)
+      | BeforeLines(l,n) -> 
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len +' (baselineskip *' n),len)
+      | AfterLines(l,n) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len,len +' (baselineskip *' n))
+      | BeforeLength(l,b) -> 
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (b -' line-gap,len -' b -' line-gap)
+      | AfterLength(l,a) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len -' a -' line-gap,a -' line-gap)
+      | Absolute(b,a) ->
+        (b -' line-gap,a -' line-gap)
+    in
+    (block-skip before-space) +++
+    heading-blockbox
+    +++ (block-skip after-space) +++
+    (read-block ctx block)
+  
+  let-mutable part-counter <- 0
+  let-mutable section-counter <- 0
+  let-mutable subsection-counter <- 0
+  let-block ctx +part =
+    blockheading (|
+      font = Sans(NumberOfChars(1.7));
+      label-font = Current;
+      subtitle-font = Sans(NumberOfChars(1.4));
+      gyodori = GyodoriCenter(4.0);
+      label-format = (fun n -> embed-string (`第` ^ (arabic n) ^ `部`));
+      reference-label-format = (fun n -> arabic n);
+      subtitle-format = (fun s -> {—#s;—});
+      indent = Length(0pt);
+      end-indent = Length(0pt);
+      after-label-space = NumberOfChars(1.0);
+      second-heading-text-indent = (false,NumberOfChars(1.0));
+      subtitle-indent = SubTitleIndent(false,NumberOfChars(1.0));
+      reset-counters = [];    
+    |) part-counter ctx
+  let-block ctx +section =
+    blockheading (|
+      font = Sans(NumberOfChars(1.4));
+      label-font = Current;
+      subtitle-font = Sans(NumberOfChars(1.0));
+      gyodori = GyodoriCenter(3.0);
+      label-format = (fun n -> embed-string(arabic n));
+      reference-label-format = (fun n -> arabic n);
+      subtitle-format = (fun s -> {—#s;—});
+      indent = Length(0pt);
+      end-indent = Length(0pt);
+      after-label-space = NumberOfChars(1.0);
+      second-heading-text-indent = (false,NumberOfChars(1.0));
+      subtitle-indent = SubTitleIndent(false,NumberOfChars(1.0));
+      reset-counters = [subsection-counter];
+    |) section-counter ctx
+  
+  let-block ctx +subsection =
+    blockheading (|
+      font = Sans(NumberOfChars(1.2));
+      label-font = Current;
+      subtitle-font = Sans(NumberOfChars(1.0));
+      gyodori = GyodoriCenter(2.0);
+      label-format = (fun n -> embed-string((arabic !section-counter) ^ `.` ^ (arabic n)));
+      reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
+      subtitle-format = (fun s -> {—#s;—});
+      indent = Length(0pt);
+      end-indent = Length(0pt);
+      after-label-space = NumberOfChars(1.0);
+      second-heading-text-indent = (false,NumberOfChars(1.0));
+      subtitle-indent = SubTitleIndent(false,NumberOfChars(1.0));
+      reset-counters = [];
+    |) subsection-counter ctx
+
+  % 定理環境
+  let theorem-scheme config theorem-name counter ctx ?:label ?:heading inner =
+    let (font-size,_) = !ref-font in
+    let to-length l = 
+      match l with
+      |NumberOfChars(n) -> font-size *' n
+      |Length(len) -> len
+    in
+    let line-gap =
+      let f = !ref-kihonhanmen in
+      f#line-gap
+    in
+    let () = counter <- !counter + 1 in
+    let subtitle = match heading with
+      | None -> {}
+      | Some(s) -> {(#s;)}
+    in
+    let hookbox = 
+      match label with
+      | None -> inline-nil
+      | Some(l) -> 
+        let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
+        let hookfunc pbinfo pt =
+          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+        in
+        hook-page-break hookfunc
+    in
+    let heading-ctx = select-font config#heading-font ctx in
+    let subtitle-box = 
+      hookbox ++ 
+      (read-inline heading-ctx theorem-name) ++
+      (read-inline heading-ctx (embed-string (arabic !counter))) ++
+      (read-inline heading-ctx subtitle) ++
+      inline-skip (to-length config#after-label-space)
+    in
+    let inner-box = read-inline (select-font config#font ctx) inner in
+    let theorem-body = 
+      line-break true true ctx (subtitle-box ++ inner-box ++ inline-fil)
+    in
+    block-skip config#before-space +++ theorem-body +++ block-skip config#after-space
+
+  % 段落
+  let-block ctx +p inner =
+    let font-size = get-font-size ctx in
+    let paragraph = (inline-skip font-size) ++ (read-inline ctx inner) ++ inline-fil in
+    line-break true true ctx paragraph
+
+  let document record ?:configopt inner =
+    let config = Option.from default-config configopt in
+    % フォント設定
+    let cjkfont = 
+      match config#cjk-font with
+      | CJKFont-preset-ipaex -> (|
+          mincho = (`ipaexm`, 1.0, 0.0);
+          gothic = (`ipaexg`, 1.0, 0.0);
+        |)
+      | CJKFont(f) -> f
+    in
+    let latinfont = 
+      match config#latin-font with
+      | LatinFont-preset-lmodern -> (|
+          roman = (`lmroman`, 1.0, 0.0);
+          italic = (`lmroman-it`, 1.0, 0.0);
+          sans = (`lmroman-b`, 1.0, 0.0);
+        |)
+      | LatinFont(f) -> f
+    in
+    let () = ref-font <- (config#font-size,(|
+      cjk = cjkfont;
+      latin = latinfont;
+    |))
+    in
+    let get-standard-context width = 
+      get-initial-context width (command \math) 
+        |> set-dominant-wide-script Kana
+        |> set-language Kana Japanese
+        |> set-language HanIdeographic Japanese
+        |> set-dominant-narrow-script Latin
+        |> set-language Latin English
+        |> set-font Kana cjkfont#mincho
+        |> set-font HanIdeographic cjkfont#mincho
+        |> set-font Latin latinfont#roman
+        |> set-math-font `lmodern`
+        |> set-hyphen-penalty 100
+        |> set-min-gap-of-lines 0pt
+    in
+
+
+    let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
+    let number-of-chars-or-length-to-length v = 
+      match v with
+        | Length(l) -> l
+        | NumberOfChars(n) -> config#font-size *' n
+    in
+    let (odd-left-margin,odd-right-margin) = 
+      match config#horizontal-layout with 
+      | HorizontalAuto -> 
+        let tw = paper-width *' 0.75 in
+        let twmod = config#font-size *' (float (round (tw /' config#font-size))) in
+        ((paper-width -' twmod) *' 0.5,(paper-width -' twmod) *' 0.5)
+      | HorizontalCenter(n) -> 
+        let len = number-of-chars-or-length-to-length n in
+        let m = (paper-width -' len) *' 0.5 in
+        (m,m)
+      | Gutter(gd) -> 
+        let len = number-of-chars-or-length-to-length gd#block-length in
+        let gutter = number-of-chars-or-length-to-length gd#gutter in
+        (gutter,paper-width -' len -' gutter)
+      | GutterFore-edge(gfe) ->
+        let gutter = number-of-chars-or-length-to-length gfe#gutter in
+        let fore-edge = number-of-chars-or-length-to-length gfe#fore-edge in
+        (gutter,fore-edge)
+    in
+    % 1.0ptはおまじない……
+    let text-width = paper-width -' odd-left-margin -' odd-right-margin +' 1.0pt in
+    let (top-space,bottom-space) = 
+      match config#vertical-layout with
+      | VerticalAuto -> (paper-height *' 0.125,paper-height *' 0.125)
+      | VerticalCenter(n) ->
+        let len = number-of-chars-or-length-to-length n in
+        let s= (paper-height -' len) *' 0.5 in
+        (s,s)
+      | Top(td) ->
+        let top-space = number-of-chars-or-length-to-length td#top-space in
+        let len = number-of-chars-or-length-to-length td#line-length in
+        (top-space,paper-height -' len -' top-space)
+      | TopBottom(tbd)->
+        let top-space = number-of-chars-or-length-to-length tbd#top-space in
+        let bottom-space = number-of-chars-or-length-to-length tbd#bottom-space in
+        (top-space,bottom-space)
+    in
+    let get-left-margin pagenum =
+      if config#twoside && (pagenum mod 2 == 0) then
+        odd-right-margin
+      else
+        odd-left-margin
+    in
+    let page-layout pbinfo =
+      let hgtfb = height-of-float-boxes pbinfo#page-number in
+      let xpoint = get-left-margin pbinfo#page-number in
+      (|
+        text-origin = (xpoint,top-space +' hgtfb);
+        text-height = paper-height -' top-space -' bottom-space
+      |)
+    in
+    let head-height = number-of-chars-or-length-to-length config#header-height in
+    let head-sep = number-of-chars-or-length-to-length config#header-sep in
+    let () = ref-kihonhanmen <- (|
+      line-gap = config#line-gap;
+    |) in
+    let pagestyle-footer ctx pbinfo =
+      line-break true true ctx 
+            (inline-fil ++ (read-inline ctx (embed-string (arabic pbinfo#page-number))) ++ inline-fil)
+    in
+    let pagestyle-header ctx pbinfo = block-nil in
+    let pagestyle pbinfo = 
+      let hc = pagestyle-header (get-standard-context text-width) pbinfo in
+      let fc = pagestyle-footer (get-standard-context text-width) pbinfo in
+      let xpoint = get-left-margin pbinfo#page-number in
+      (|
+        header-content = hc;
+        header-origin = (xpoint,top-space -' head-sep -' head-height);
+        footer-content = fc;
+        footer-origin = (xpoint,paper-height -' bottom-space +' head-sep);
+      |)
+    in
+    let ctx-doc = get-standard-context text-width
+      |> set-font-size config#font-size
+      |> set-leading (config#font-size +' config#line-gap)
+      |> set-paragraph-margin config#line-gap config#line-gap
+    in
+    let doc = page-break config#paper-size page-layout pagestyle
+      (read-block ctx-doc inner)
+    in
+    doc
+
+end
+
+let document = JLReq.document
+
