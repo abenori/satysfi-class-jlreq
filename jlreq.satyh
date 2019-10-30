@@ -80,6 +80,8 @@ type blockheading-gyodori =
 
 type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * number-of-chars-or-length
 
+type reference-mark-type = Interlinear | Inline
+
 module JLReq : sig
   val default-config : config
 
@@ -97,8 +99,9 @@ module JLReq : sig
   
   direct \ref : [string] inline-cmd
   direct \ref-page : [string] inline-cmd
+  direct \footnote : [inline-text] inline-cmd
 
-  val blockheading : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+  val blockheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
       font : nfss;
       label-font : nfss;
@@ -124,6 +127,17 @@ module JLReq : sig
       reference-label-format : int -> string;
       after-label-space : number-of-chars-or-length;
     |)
+  val footnote-scheme : 'a -> int ref -> context -> inline-text -> inline-boxes
+    constraint 'a :: (|
+      reference-mark-type : reference-mark-type;
+      reference-mark-format : int -> inline-text;
+      reference-mark-font : nfss;
+      font : nfss;
+      line-gap : number-of-chars-or-length;
+      indent : number-of-chars-or-length;
+      second-indent : number-of-chars-or-length;
+    |)
+    
 
 end = struct
   let default-config = (|
@@ -204,41 +218,47 @@ end = struct
   
   %. 基本版面保持
   let-mutable ref-kihonhanmen <- (|
-    line-gap = 7pt;
   |)
   %. フォント
-  let-mutable ref-font <- (10pt,(|
+  % font-size,line-gap,フォントたち
+  let-mutable ref-font <- (10pt,7pt,(|
     cjk = (|mincho = (`ipaexm`,1.0,0.0); gothic = (`ipaexg`,1.0,0.0);|);
     latin = (|roman = (`lmroman`,1.0,0.0); italic = (`lmroman-it`,1.0,0.0); sans = (`lmroman-b`,1.0,0.0);|);
   |))
   let select-font f ctx =
-    let (font-size,font) = !ref-font in
-    let to-length ncl = 
-      match ncl with
-      | Length(l) -> l
-      | NumberOfChars(n) -> font-size *' n
+    let (font-size,line-gap,font) = !ref-font in
+    let set-font-line-gap ncl ctx =
+      let (fs,lg) = 
+        match ncl with
+        | NumberOfChars(n) -> (font-size *' n,line-gap *' n)
+        | Length(l) -> (l,line-gap *' (l /' font-size))
+      in
+      ctx
+      |> set-font-size fs
+      |> set-leading (fs +' lg)
+      |> set-paragraph-margin lg lg
     in
     match f with
     | Current -> ctx
     | CurrentType(n) -> ctx
-      |> set-font-size (to-length n)
+      |> set-font-line-gap n
     | Roman(n) -> ctx
-      |> set-font-size (to-length n)
+      |> set-font-line-gap n
       |> set-font Kana font#cjk#mincho
       |> set-font HanIdeographic font#cjk#mincho
       |> set-font Latin font#latin#roman
     | Sans(n) -> ctx
-      |> set-font-size (to-length n)
+      |> set-font-line-gap n
       |> set-font Kana font#cjk#gothic
       |> set-font HanIdeographic font#cjk#gothic
       |> set-font Latin font#latin#sans
     | Italic(n) -> ctx
-      |> set-font-size (to-length n)
+      |> set-font-line-gap n
       |> set-font Kana font#cjk#mincho
       |> set-font HanIdeographic font#cjk#mincho
       |> set-font Latin font#latin#italic
     | Font(size,f) -> ctx
-      |> set-font-size (to-length size)
+      |> set-font-line-gap size
       |> set-font Kana f#cjk
       |> set-font HanIdeographic f#cjk
       |> set-font Latin f#latin
@@ -252,8 +272,8 @@ end = struct
     
   
   %. 別行見出し
-  let blockheading config counter ctx ?:label ?:runninghead ?:subtitle heading block =
-    let (font-size,_) = !ref-font in
+  let blockheading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
+    let (font-size,line-gap,_) = !ref-font in
     let to-length l = match l with 
       | NumberOfChars(n) -> font-size *' n
       | Length(ll) -> ll
@@ -296,10 +316,6 @@ end = struct
     in
     let label-heading-box = 
       (inline-skip (0pt -' heading-text-indent)) ++ label-box ++ (inline-skip (to-length config#after-label-space)) ++ (read-inline ctxheading heading)
-    in
-    let line-gap =
-      let k = !ref-kihonhanmen in
-      k#line-gap
     in
     let output c =
       let ctxa = set-paragraph-margin line-gap line-gap c in
@@ -357,7 +373,7 @@ end = struct
   let-mutable section-counter <- 0
   let-mutable subsection-counter <- 0
   let-block ctx +part =
-    blockheading (|
+    blockheading-scheme (|
       font = Sans(NumberOfChars(1.7));
       label-font = Current;
       subtitle-font = Sans(NumberOfChars(1.4));
@@ -373,7 +389,7 @@ end = struct
       reset-counters = [];    
     |) part-counter ctx
   let-block ctx +section =
-    blockheading (|
+    blockheading-scheme (|
       font = Sans(NumberOfChars(1.4));
       label-font = Current;
       subtitle-font = Sans(NumberOfChars(1.0));
@@ -390,7 +406,7 @@ end = struct
     |) section-counter ctx
   
   let-block ctx +subsection =
-    blockheading (|
+    blockheading-scheme (|
       font = Sans(NumberOfChars(1.2));
       label-font = Current;
       subtitle-font = Sans(NumberOfChars(1.0));
@@ -406,17 +422,13 @@ end = struct
       reset-counters = [];
     |) subsection-counter ctx
 
-  % 定理環境
+  %. 定理環境
   let theorem-scheme config theorem-name counter ctx ?:label ?:heading inner =
-    let (font-size,_) = !ref-font in
+    let (font-size,line-gap,_) = !ref-font in
     let to-length l = 
       match l with
       |NumberOfChars(n) -> font-size *' n
       |Length(len) -> len
-    in
-    let line-gap =
-      let f = !ref-kihonhanmen in
-      f#line-gap
     in
     let () = counter <- !counter + 1 in
     let subtitle = match heading with
@@ -447,12 +459,133 @@ end = struct
     in
     block-skip config#before-space +++ theorem-body +++ block-skip config#after-space
 
-  % 段落
+  %. 脚注
+%      reference-mark-type : reference-mark-type;
+%      reference-mark-format : int -> inline-text;
+% reference-mark-format
+  let-mutable ref-footnote-exists-pages <- []
+  let-mutable ref-footnote-label-numer <- 0
+  let footnote-get-reference-mark-box ctx mark-type font format num =
+    let mark-box = read-inline (select-font font ctx) (format num) in
+    let (length,height,depth) = get-natural-metrics mark-box in
+    let font-size = get-font-size ctx in
+    match mark-type with
+    | Inline ->
+      let shift-y = font-size *' 0.3 in
+      let draw (x,y) = [
+          draw-text (x, y +' shift-y) mark-box;
+        ]
+      in
+      let b = inline-graphics length (depth +' shift-y) height draw in
+      discretionary 10000 b b b
+    | Interlinear ->
+      let draw (x,y) =
+        [
+          draw-text (x -' length, y +' font-size) mark-box;
+        ]
+      in
+      inline-graphics 0pt 0pt 0pt draw
+  
+  let footnote-register-is-first-box label =
+    let hook pbinfo pt =
+      let-rec is-first-search lst =
+        match lst with
+        | x :: xs ->
+          if x == pbinfo#page-number then false else is-first-search xs
+        | [] -> true
+      in
+      let is-first = is-first-search !ref-footnote-exists-pages in
+      let () = ref-footnote-exists-pages <- pbinfo#page-number :: !ref-footnote-exists-pages in
+      let tf = if is-first then `T` else `F` in
+      register-cross-reference label tf
+    in
+    hook-page-break hook
+  
+  let footnote-line-box ctx label font-size line-gap = 
+    match get-cross-reference label with
+    |Some(`T`) -> 
+      let text-width = get-text-width ctx in
+      line-break false false (set-paragraph-margin 0pt 0pt ctx) (
+        inline-graphics (text-width *' 0.3) 0pt 0pt (fun (x, y) ->
+          [ stroke 0.12mm (RGB(0.0,0.0,0.0))
+            (start-path (x,y) 
+              |> line-to (x +' text-width *' 0.3, y)
+              |> terminate-path);
+          ]
+        ) ++  inline-fil
+      ) +++ (block-skip (line-gap *' 1.5))
+    |_ -> block-skip line-gap
+  
+  let footnote-scheme config counter ctx txt =
+    let () = counter <- !counter + 1 in
+    let () = ref-footnote-label-numer <- !ref-footnote-label-numer + 1 in
+    let inner-label = ((arabic !ref-footnote-label-numer) ^ `:footnote-label`) in
+    let (font-size,line-gap,_) = !ref-font in
+    let reference-mark-box = 
+      footnote-get-reference-mark-box ctx
+        config#reference-mark-type
+        config#reference-mark-font
+        config#reference-mark-format
+        !counter
+    in
+    let footnote-line-gap =
+      match config#line-gap with
+      |NumberOfChars(n) -> line-gap *' n
+      |Length(l) -> l
+    in
+    let footnote-font-size = get-font-size (select-font config#font ctx) in
+    let footnote-box-line = footnote-line-box ctx inner-label footnote-font-size footnote-line-gap in
+    let to-length ncl =
+      match ncl with
+      | NumberOfChars(n) -> font-size *' n
+      | Length(l) -> l
+    in
+    let footnote-box-main = 
+      let indent-c = (to-length config#indent) in
+      let text-width = (get-text-width ctx) in
+      let number-of-chars = round ((text-width -' indent-c) /' font-size) in
+      let indent = text-width -' font-size *' (float number-of-chars) in
+      let second-indent = (to-length config#second-indent) in
+      let pads = (indent +' second-indent, 0pt, 0pt, 0pt) in
+      let decos =
+        let deco _ _ _ _ = [] in
+        (deco, deco, deco, deco)
+      in
+      let output c =
+        let cc = set-leading (footnote-line-gap +' footnote-font-size) c in
+        let rmb = read-inline cc (config#reference-mark-format !counter) in
+        let (len,_,_) = get-natural-metrics rmb in
+        let body = read-inline cc txt in
+        line-break false false cc
+        (
+          (inline-skip (0pt -' second-indent)) ++
+          rmb ++ (inline-skip (footnote-font-size)) ++ body ++ inline-fil
+        )
+      in
+      block-frame-breakable (set-paragraph-margin 0pt 0pt ctx) pads decos output
+    in
+    (footnote-register-is-first-box inner-label) ++
+    reference-mark-box ++
+    (add-footnote (footnote-box-line +++ footnote-box-main))
+  
+  let-mutable ref-footnote-counter <- 0
+  let-inline ctx \footnote = footnote-scheme (|
+    reference-mark-type = Inline;
+    reference-mark-font = Roman(NumberOfChars(0.6));
+    font = Roman(NumberOfChars(0.8));
+    line-gap = NumberOfChars(0.675);
+    reference-mark-format = (fun n -> embed-string ((arabic n) ^ `)`));
+    indent = Length(0pt);
+    second-indent = NumberOfChars(1.0);
+  |) ref-footnote-counter ctx
+  
+  %. 段落
   let-block ctx +p inner =
     let font-size = get-font-size ctx in
     let paragraph = (inline-skip font-size) ++ (read-inline ctx inner) ++ inline-fil in
     line-break true true ctx paragraph
 
+  %. document
   let document record ?:configopt inner =
     let config = Option.from default-config configopt in
     % フォント設定
@@ -473,7 +606,8 @@ end = struct
         |)
       | LatinFont(f) -> f
     in
-    let () = ref-font <- (config#font-size,(|
+    let () = ref-font <- (config#font-size,config#line-gap,
+    (|
       cjk = cjkfont;
       latin = latinfont;
     |))
@@ -554,7 +688,6 @@ end = struct
     let head-height = number-of-chars-or-length-to-length config#header-height in
     let head-sep = number-of-chars-or-length-to-length config#header-sep in
     let () = ref-kihonhanmen <- (|
-      line-gap = config#line-gap;
     |) in
     let pagestyle-footer ctx pbinfo =
       line-break true true ctx 
