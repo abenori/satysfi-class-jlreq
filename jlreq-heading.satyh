@@ -1,0 +1,132 @@
+@import: jlreq-base
+@import: jlreq-font
+
+type blockheading-gyodori = 
+  | GyodoriCenter of float
+  | BeforeLines of float * float
+  | BeforeLength of float * length
+  | AfterLines of float * float
+  | AfterLength of float * length
+  | Absolute of length * length
+
+type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * zw-or-length
+
+module JLReqHeading : sig
+  val blockheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+    constraint 'a :: (|
+      font : nfss;
+      label-font : nfss;
+      subtitle-font : nfss;
+      gyodori : blockheading-gyodori;
+      label-format : int -> inline-text;
+      reference-label-format : int -> string;
+      subtitle-format : inline-text -> inline-text;
+      indent : zw-or-length;
+      end-indent : zw-or-length;
+      after-label-space : zw-or-length;
+      % ラベル頭起点にするならば一つ目をtrueにする．
+      second-heading-text-indent : bool * zw-or-length;
+      subtitle-indent : blockheading-subtitle-indent;
+      reset-counters : (int ref) list;
+    |)
+end = struct
+  %. 別行見出し
+  let blockheading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
+    let font-size = JLReqFont.get-font-size in
+    let line-gap = JLReqFont.get-line-gap in
+    let to-length l = match l with 
+      | ZW(n) -> font-size *' n
+      | Length(ll) -> ll
+    in
+    let ctxheading = ctx
+      |> JLReqFont.select-font config#font
+    in
+    let () = counter <- !counter + 1 in
+    let-rec reset-counters l =
+      match l with
+      | [] -> ()
+      | x :: xs -> 
+        let () = x <- 0 in
+        reset-counters xs
+    in
+    let () = reset-counters config#reset-counters in
+    let hookbox = 
+      match label with
+      | None -> inline-nil
+      | Some(l) -> 
+        let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
+        let hookfunc pbinfo pt =
+          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+        in
+        hook-page-break hookfunc
+    in
+    let label-box = hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) (config#label-format !counter)) in
+    let (label-length,_,_) = get-natural-metrics label-box in
+    let heading-text-indent = 
+      let (fromlabel,len) = config#second-heading-text-indent in
+      if fromlabel then
+        to-length len
+      else
+        label-length +' (to-length config#after-label-space) +' (to-length len)
+    in
+    let get-pads indent end-indent = (indent, end-indent, 0pt, 0pt) in
+    let decos =
+      let deco _ _ _ _ = [] in
+      (deco, deco, deco, deco)
+    in
+    let label-heading-box = 
+      (inline-skip (0pt -' heading-text-indent)) ++ label-box ++ (inline-skip (to-length config#after-label-space)) ++ (read-inline ctxheading heading)
+    in
+    let output c =
+      let ctxa = set-paragraph-margin line-gap line-gap c in
+      let (first-boxes,second-boxes) = % inline-box, block-box
+        match subtitle with
+        | None -> (label-heading-box,block-nil)
+        | Some(subt) ->
+          let subtitle-txt = config#subtitle-format subt in
+          match config#subtitle-indent with
+          | SubTitleNoBreak ->
+            (label-heading-box ++ (read-inline (JLReqFont.select-font config#subtitle-font ctxa) subtitle-txt),block-nil)
+          | SubTitleIndent(fromlabel,l) ->
+            let len = to-length l in
+            let outputsubtitle cc =
+              line-break false false (JLReqFont.select-font config#subtitle-font cc) ((read-inline (JLReqFont.select-font config#subtitle-font cc) subtitle-txt) ++ inline-fil)
+            in
+            let subtitle-indent = if fromlabel then len else len +' label-length +' (to-length config#after-label-space) in
+            (label-heading-box, block-frame-breakable ctxa (get-pads subtitle-indent 0pt) decos outputsubtitle)
+      in
+      let outputheading cc =
+        line-break false false cc (first-boxes ++ inline-fil)
+      in
+      (
+        block-frame-breakable ctxa (get-pads heading-text-indent 0pt) decos outputheading
+      ) +++ second-boxes
+    in
+    let heading-blockbox = block-frame-breakable (set-paragraph-margin 0pt 0pt ctxheading) (get-pads (to-length config#indent) (to-length config#end-indent)) decos output in
+    let (before-space,after-space) = 
+      let baselineskip = font-size +' line-gap in
+      match config#gyodori with
+      | GyodoriCenter(l) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len -' line-gap,len -' line-gap)
+      | BeforeLines(l,n) -> 
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len +' (baselineskip *' n),len)
+      | AfterLines(l,n) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len,len +' (baselineskip *' n))
+      | BeforeLength(l,b) -> 
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (b -' line-gap,len -' b -' line-gap)
+      | AfterLength(l,a) ->
+        let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
+        (len -' a -' line-gap,a -' line-gap)
+      | Absolute(b,a) ->
+        (b -' line-gap,a -' line-gap)
+    in
+    (block-skip before-space) +++
+    heading-blockbox
+    +++ (block-skip after-space) +++
+    (read-block ctx block)
+
+end

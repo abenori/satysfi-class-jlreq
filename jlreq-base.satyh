@@ -1,0 +1,5 @@
+type zw-or-length = 
+  | Length of length
+  | ZW of float
+
+
