@@ -1,0 +1,28 @@
+module JLReqPageStyle : sig
+  val register-pagestyle : (context -> (|page-number : int|) -> block-boxes) -> (context -> (|page-number : int|) -> block-boxes) -> inline-boxes
+  val header : context -> (|page-number : int|) -> block-boxes
+  val footer : context -> (|page-number : int|) -> block-boxes
+end = struct
+  let default-pagestyle-footer ctx pbinfo =
+    let () = display-message `pagestyle` in
+    line-break true true ctx 
+      (inline-fil ++ (read-inline ctx (embed-string (arabic pbinfo#page-number))) ++ inline-fil)
+  let-mutable ref-pagestyle <- (|
+    header = (fun ctx pbinfo -> block-nil);
+    footer = default-pagestyle-footer;
+  |)
+  let register-pagestyle hd ft =
+    hook-page-break (fun pbinfp point -> (
+      let () = display-message `hook-page-break` in
+      ref-pagestyle <- (|header = hd; footer = ft;|))
+    )
+
+  let header ctx pbinfo = 
+    let ps = !ref-pagestyle in
+    ps#header ctx pbinfo
+
+  let footer ctx pbinfo = 
+    let ps = !ref-pagestyle in
+    ps#footer ctx pbinfo
+  
+end
