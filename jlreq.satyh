@@ -185,6 +185,8 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];    
+      mark-index = 0;
+      mark-format = (fun cnt txt -> {#cnt;. #txt;})
     |) part-counter ctx
   let-block ctx +section =
     JLReqHeading.blockheading-scheme (|
@@ -201,6 +203,8 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [subsection-counter];
+      mark-index = 0;
+      mark-format = (fun cnt txt -> {#cnt; #txt;})
     |) section-counter ctx
   
   let-block ctx +subsection =
@@ -218,6 +222,8 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];
+      mark-index = 0;
+      mark-format = (fun cnt txt -> {#cnt; #txt;})
     |) subsection-counter ctx
 
 

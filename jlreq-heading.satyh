@@ -1,5 +1,6 @@
 @import: jlreq-base
 @import: jlreq-font
+@import: jlreq-mark
 
 type blockheading-gyodori = 
   | GyodoriCenter of float
@@ -28,6 +29,8 @@ module JLReqHeading : sig
       second-heading-text-indent : bool * zw-or-length;
       subtitle-indent : blockheading-subtitle-indent;
       reset-counters : (int ref) list;
+      mark-index : int;
+      mark-format : inline-text -> inline-text -> inline-text;
     |)
 end = struct
   %. 別行見出し
@@ -60,7 +63,14 @@ end = struct
         in
         hook-page-break hookfunc
     in
-    let label-box = hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) (config#label-format !counter)) in
+    let tocheading =
+      match runninghead with
+      |None -> heading
+      |Some(s) -> s
+    in
+    let i-label = config#label-format !counter in
+    let label-box = (JLReqMark.set config#mark-index (config#mark-format i-label tocheading)) ++
+      hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) i-label) in
     let (label-length,_,_) = get-natural-metrics label-box in
     let heading-text-indent = 
       let (fromlabel,len) = config#second-heading-text-indent in
