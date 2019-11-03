@@ -63,13 +63,16 @@ type config = (|
 module JLReq : sig
   val default-config : config
 
-  val document : 'a -> config ?-> block-text -> document
-    constraint 'a :: (|
+  val document : (|
       title : inline-text;
       author : inline-text;
+      date : inline-text;
       show-toc : bool;
       show-title : bool;
-    |)
+    |) -> config ?-> (|
+      maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
+    |) ?-> block-text -> document
+  val \space : [zw-or-length] inline-cmd
   direct +p : [inline-text] block-cmd
   direct +part : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
@@ -114,6 +117,14 @@ end = struct
     read-inline ctx ref-txt
   let-inline ctx \ref l = output-cross-reference ctx (l ^ `:num`)
   let-inline ctx \ref-page l = output-cross-reference ctx (l ^ `:page`)
+  
+  %. スペース
+  let-inline ctx \space len =
+    let l = match len with
+      | ZW(n) -> (get-font-size ctx) *' n
+      | Length(l) -> l
+    in
+    inline-skip l
   
 %  let-rec string-to-int s =
 %    let len = string-length s in
@@ -186,7 +197,8 @@ end = struct
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];    
       mark-index = -1;
-      mark-format = (fun cnt txt -> {#cnt;. #txt;})
+      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
+      clear-mark-indices = [];
     |) part-counter ctx
   let-block ctx +section =
     JLReqHeading.blockheading-scheme (|
@@ -204,7 +216,8 @@ end = struct
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [subsection-counter];
       mark-index = 0;
-      mark-format = (fun cnt txt -> {#cnt; #txt;})
+      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
+      clear-mark-indices = [1];
     |) section-counter ctx
   
   let-block ctx +subsection =
@@ -223,7 +236,8 @@ end = struct
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];
       mark-index = 1;
-      mark-format = (fun cnt txt -> {#cnt; #txt;})
+      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
+      clear-mark-indices = [];
     |) subsection-counter ctx
 
 
@@ -243,10 +257,37 @@ end = struct
     let font-size = get-font-size ctx in
     let paragraph = (inline-skip font-size) ++ (read-inline ctx inner) ++ inline-fil in
     line-break true true ctx paragraph
-
+  
+  %. maketitle
+  let maketitle ctx title author date =
+    let get-b font txt =
+      let ib = read-inline (JLReqFont.select-font font ctx) txt in
+      let (len,_,_) = get-natural-metrics ib in
+      if len >' 0pt then
+        line-break false false ctx (inline-fil ++ ib ++ inline-fil)
+      else
+        block-nil
+    in
+    let title-b = get-b (Roman(ZW(1.7))) title in
+    let author-b = get-b (Roman(ZW(1.3))) author in
+    let date-b = get-b (Roman(ZW(1.3))) date in
+    let font-size = get-font-size ctx in
+    let skip box length =
+      if (get-natural-length box) >' 0pt then
+        block-skip length
+      else
+        block-nil
+    in
+    title-b +++ (skip title-b (font-size *' 1.5)) +++ author-b +++ (skip author-b (font-size *' 1.5)) +++ date-b +++ (skip date-b (font-size *' 1.5))
+  
+  let default-format = (|
+    maketitle = maketitle;
+  |)
+  
   %. document
-  let document record ?:configopt inner =
+  let document record ?:configopt ?:formatopt inner =
     let config = Option.from default-config configopt in
+    let formats = Option.from default-format formatopt in
     % フォント設定
     let cjkfont = 
       match config#cjk-font with
@@ -369,9 +410,13 @@ end = struct
       |> set-leading (config#font-size +' config#line-gap)
       |> set-paragraph-margin config#line-gap config#line-gap
     in
-    let doc = page-break config#paper-size page-layout pagestyle
-      (read-block ctx-doc inner)
+    let main-block = read-block ctx-doc inner in
+    % dummy
+    let title-b = 
+      if record#show-title then formats#maketitle ctx-doc record#title record#author record#date
+      else block-nil
     in
+    let doc = page-break config#paper-size page-layout pagestyle (title-b +++ main-block) in
     doc
 
 end

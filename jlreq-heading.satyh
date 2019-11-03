@@ -1,3 +1,4 @@
+@require: list
 @import: jlreq-base
 @import: jlreq-font
 @import: jlreq-mark
@@ -30,6 +31,7 @@ module JLReqHeading : sig
       subtitle-indent : blockheading-subtitle-indent;
       reset-counters : (int ref) list;
       mark-index : int;
+      clear-mark-indices : int list;
       mark-format : inline-text -> inline-text -> inline-text;
     |)
 end = struct
@@ -69,7 +71,12 @@ end = struct
       |Some(s) -> s
     in
     let i-label = config#label-format !counter in
-    let label-box = (JLReqMark.set config#mark-index (config#mark-format i-label tocheading)) ++
+    let register-mark-box = 
+      List.fold-left (fun a b -> a ++ (JLReqMark.set b {}))
+       (JLReqMark.set config#mark-index (config#mark-format i-label tocheading))
+       config#clear-mark-indices
+    in
+    let label-box = register-mark-box ++
       hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) i-label) in
     let (label-length,_,_) = get-natural-metrics label-box in
     let heading-text-indent = 
@@ -134,9 +141,15 @@ end = struct
       | Absolute(b,a) ->
         (b -' line-gap,a -' line-gap)
     in
-    (block-skip before-space) +++
-    heading-blockbox
-    +++ (block-skip after-space) +++
-    (read-block ctx block)
+    let final-box = 
+      (block-skip before-space) +++
+      heading-blockbox
+      +++ (block-skip after-space) +++
+      (read-block ctx block)
+    in
+    % 改ページしないための処理（これでいいのかな？）
+    let target-txt = embed-block-breakable ctx final-box in
+    let (w,h,d) = get-natural-metrics target-txt in
+    line-break true false ctx (inline-graphics w h d (fun pt ->  [draw-text pt target-txt]))
 
 end
