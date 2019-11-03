@@ -185,7 +185,7 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];    
-      mark-index = 0;
+      mark-index = -1;
       mark-format = (fun cnt txt -> {#cnt;. #txt;})
     |) part-counter ctx
   let-block ctx +section =
@@ -222,7 +222,7 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];
-      mark-index = 0;
+      mark-index = 1;
       mark-format = (fun cnt txt -> {#cnt; #txt;})
     |) subsection-counter ctx
 
@@ -348,8 +348,14 @@ end = struct
     let () = ref-kihonhanmen <- (|
     |) in
     let pagestyle pbinfo = 
-      let hc = JLReqPageStyle.header (get-standard-context text-width) pbinfo in
-      let fc = JLReqPageStyle.footer (get-standard-context text-width) pbinfo in
+      let (h,f) = 
+        if config#twoside && (pbinfo#page-number mod 2 == 0) then 
+          (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
+        else
+          (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
+      in
+      let hc = h (get-standard-context text-width) pbinfo in
+      let fc = f (get-standard-context text-width) pbinfo in
       let xpoint = get-left-margin pbinfo#page-number in
       (|
         header-content = hc;

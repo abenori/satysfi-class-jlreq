@@ -1,52 +1,49 @@
 module JLReqMark : sig
   val set : int -> inline-text -> inline-boxes
-  val get : int -> int -> inline-text option
-  val get-current : int -> inline-text option
+  val get-first : int -> int -> inline-text option
+  val get-last : int -> int -> inline-text option
 end = struct
-  % (index,page,中身)
+
+  % (index,page,(first,last))
   let-mutable ref-mark <- []
   
   let set index txt =
     let hook pbinfo _ =
       let-rec aux lst =
         match lst with
-        | (i,p,m) :: xs -> 
+        | (i,p,(fm,lm)) :: xs -> 
           let (b,rest) = aux xs in
           if i == index && p == pbinfo#page-number then
-            (true,(i,p,txt) :: rest)
+            (true,(i,p,(fm,txt)) :: rest)
           else
-            (b,(i,p,m) :: rest)
+            (b,(i,p,(fm,lm)) :: rest)
         | [] -> (false,[])
       in
       let (b,nlst) = aux !ref-mark in
       let newmarks = 
         if b then nlst
-        else (index,pbinfo#page-number,txt) :: nlst
+        else (index,pbinfo#page-number,(txt,txt)) :: nlst
       in
       ref-mark <- newmarks
     in
     hook-page-break hook
-  let get index page =
+  
+  let get isfirst index page =
     let-rec aux lst =
       match lst with
-      | (i,p,m)  :: xs ->
-        if i == index && p == page then Some(m)
-        else aux xs
-      | [] -> None
+      |[] -> (-1,None,None)
+      |(i,p,(fm,lm)) :: xs -> (
+        let (rp,rfm,rlm) = aux xs in
+        if i == index && p <= page && rp < p then (p,Some(fm),Some(lm))
+        else (rp,rfm,rlm)
+       )
     in
-    aux !ref-mark
+    let (_,fm,lm) = aux !ref-mark in
+    if isfirst then fm else lm
 
-  let get-current index =
-    let-rec aux lst =
-      match lst with
-      | (i,p,m) :: xs ->
-        let (maxpage,mark) = aux xs in
-        if maxpage < p then (p,Some(m))
-        else (maxpage,mark)
-      | [] -> (-1,None)
-    in
-    let (_,m) = aux !ref-mark in
-    m
+  let get-first = get true
+  let get-last = get false
+
 end
 
 

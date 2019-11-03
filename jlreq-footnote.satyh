@@ -73,8 +73,8 @@ end = struct
     let () = counter <- !counter + 1 in
     let () = ref-footnote-label-numer <- !ref-footnote-label-numer + 1 in
     let inner-label = ((arabic !ref-footnote-label-numer) ^ `:footnote-label`) in
-    let font-size = JLReqFont.get-font-size in
-    let line-gap = JLReqFont.get-line-gap in
+    let font-size = JLReqFont.font-size in
+    let line-gap = JLReqFont.line-gap in
     let reference-mark-box = 
       footnote-get-reference-mark-box ctx
         config#reference-mark-type

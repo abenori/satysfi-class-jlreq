@@ -24,8 +24,8 @@ module JLReqFont : sig
     |);
   |) -> unit
   val select-font : nfss -> context -> context
-  val get-font-size : length
-  val get-line-gap : length
+  val font-size : length
+  val line-gap : length
 end = struct
   % font-size, line-gap, fontたち
   let-mutable ref-font <- (10pt,7pt,(|
@@ -36,10 +36,10 @@ end = struct
   let register-font font-size line-gap fonts =
     ref-font <- (font-size,line-gap,fonts)
   
-  let get-font-size = 
+  let font-size = 
     let (fs,_,_) = !ref-font in
     fs
-  let get-line-gap = 
+  let line-gap = 
     let (_,lg,_) = !ref-font in
     lg
   

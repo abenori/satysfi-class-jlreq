@@ -15,8 +15,8 @@ module JLReqTheorem : sig
 end = struct
   %. 定理環境
   let theorem-scheme config theorem-name counter ctx ?:label ?:heading inner =
-    let font-size = JLReqFont.get-font-size in
-    let line-gap = JLReqFont.get-line-gap in
+    let font-size = JLReqFont.font-size in
+    let line-gap = JLReqFont.line-gap in
     let to-length l = 
       match l with
       |ZW(n) -> font-size *' n

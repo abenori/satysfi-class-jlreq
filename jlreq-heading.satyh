@@ -35,8 +35,8 @@ module JLReqHeading : sig
 end = struct
   %. 別行見出し
   let blockheading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
-    let font-size = JLReqFont.get-font-size in
-    let line-gap = JLReqFont.get-line-gap in
+    let font-size = JLReqFont.font-size in
+    let line-gap = JLReqFont.line-gap in
     let to-length l = match l with 
       | ZW(n) -> font-size *' n
       | Length(ll) -> ll
