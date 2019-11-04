@@ -144,12 +144,13 @@ end = struct
     let final-box = 
       (block-skip before-space) +++
       heading-blockbox
-      +++ (block-skip after-space) +++
-      (read-block ctx block)
+      +++ (block-skip after-space)
     in
-    % 改ページしないための処理（これでいいのかな？）
+%    % 改ページしないための処理（これでいいのかな？）
     let target-txt = embed-block-breakable ctx final-box in
     let (w,h,d) = get-natural-metrics target-txt in
     line-break true false ctx (inline-graphics w h d (fun pt ->  [draw-text pt target-txt]))
+    +++ (read-block ctx block)
+
 
 end
