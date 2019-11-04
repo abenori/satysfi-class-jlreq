@@ -33,14 +33,14 @@ type kihon-hanmen-vertical =
      |)
 
 type config-cjkfont =
-  | CJKFont-preset-ipaex
+  | CJKFont-preset-ipaex of float
   | CJKFont of (|
     mincho : string * float * float;
     gothic : string * float * float;
   |)
 
 type config-latinfont = 
-  | LatinFont-preset-lmodern
+  | LatinFont-preset-lmodern of float
   | LatinFont of (|
     roman : string * float * float;
     italic : string * float * float;
@@ -73,7 +73,15 @@ module JLReq : sig
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     |) ?-> block-text -> document
   val \hspace : [zw-or-length] inline-cmd
+  val float-scheme : (|
+    caption-font : nfss;
+    caption-label-font : nfss;
+    caption-after-label-space : zw-or-length;
+    caption-label-format : int -> inline-text;
+  |) -> int ref -> context -> string ?-> inline-text -> block-text -> inline-boxes
+  
   direct +p : [inline-text] block-cmd
+  direct +pn : [inline-text] block-cmd
   direct +part : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +subsection : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
@@ -82,6 +90,7 @@ module JLReq : sig
   direct \ref : [string] inline-cmd
   direct \ref-page : [string] inline-cmd
   direct \footnote : [inline-text] inline-cmd
+  direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
   let default-config = (|
     twoside = false;
@@ -92,8 +101,8 @@ end = struct
     header-height = ZW(1.0);
     font-size = 10pt;
     line-gap = 7pt;
-    cjk-font = CJKFont-preset-ipaex;
-    latin-font = LatinFont-preset-lmodern;
+    cjk-font = CJKFont-preset-ipaex(1.0);
+    latin-font = LatinFont-preset-lmodern(1.0);
   |)
   
   let paper-size-to-width-height ps = 
@@ -131,13 +140,49 @@ end = struct
   let-mutable ref-kihonhanmen <- (|
   |)
   
-  %. フロート？
+  %. フロート
   let-mutable ref-float-boxes <- []
   let height-of-float-boxes pageno =
     (!ref-float-boxes) |> List.fold-left (fun h (pn, bb) -> (
       if pn < pageno then h +' (get-natural-length bb) else h
     )) 0pt
+  let float-scheme config counter ctx ?:label caption inner =
+    let () = counter <- !counter + 1 in
+    let () = match label with
+      |None -> ()
+      |Some(l) -> register-cross-reference (l ^ `:num`) (arabic !counter)
+    in
+    let caption-ctx = JLReqFont.select-font config#caption-font ctx in
+    let label-ctx = JLReqFont.select-font config#caption-label-font caption-ctx in
+    let to-length len =
+      match len with
+      | ZW(n) -> (get-font-size ctx) *' n
+      | Length(l) -> l
+    in
+    let b-caption =
+      (read-inline label-ctx (config#caption-label-format !counter)) ++ 
+      (inline-skip (to-length config#caption-after-label-space)) ++
+      (read-inline caption-ctx caption)
+    in
+    let bb-inner =
+      let d (_, _) _ _ _ = [] in
+      block-frame-breakable ctx (2pt, 2pt, 2pt, 2pt) (d, d, d, d) (fun ctx -> (
+        (read-block ctx inner) +++
+        (line-break true true ctx (inline-fil ++ b-caption ++ inline-fil))
+      ))
+    in
+      hook-page-break (fun pbinfo _ -> (
+        ref-float-boxes <- (pbinfo#page-number, bb-inner) :: !ref-float-boxes
+      ))
   
+  let-mutable figure-counter <- 0
+  let-inline ctx \figure = float-scheme (|
+      caption-font = Sans(ZW(1.0));
+      caption-label-font = Sans(ZW(1.0));
+      caption-after-label-space = ZW(1.0);
+      caption-label-format = (fun n -> embed-string (arabic n));
+    |) figure-counter ctx
+
   
   %. 見出し
   let-mutable part-counter <- 0
@@ -237,6 +282,10 @@ end = struct
     let font-size = get-font-size ctx in
     let paragraph = (inline-skip font-size) ++ (read-inline ctx inner) ++ inline-fil in
     line-break true true ctx paragraph
+
+  let-block ctx +pn inner =
+    let paragraph = (read-inline ctx inner) ++ inline-fil in
+    line-break true true ctx paragraph
   
   %. maketitle
   let maketitle ctx title author date =
@@ -271,18 +320,18 @@ end = struct
     % フォント設定
     let cjkfont = 
       match config#cjk-font with
-      | CJKFont-preset-ipaex -> (|
-          mincho = (`ipaexm`, 1.0, 0.0);
-          gothic = (`ipaexg`, 1.0, 0.0);
+      | CJKFont-preset-ipaex(scale) -> (|
+          mincho = (`ipaexm`, scale, 0.0);
+          gothic = (`ipaexg`, scale, 0.0);
         |)
       | CJKFont(f) -> f
     in
     let latinfont = 
       match config#latin-font with
-      | LatinFont-preset-lmodern -> (|
-          roman = (`lmroman`, 1.0, 0.0);
-          italic = (`lmroman-it`, 1.0, 0.0);
-          sans = (`lmroman-b`, 1.0, 0.0);
+      | LatinFont-preset-lmodern(scale) -> (|
+          roman = (`lmroman`, scale, 0.0);
+          italic = (`lmroman-it`, scale, 0.0);
+          sans = (`lmroman-b`, scale, 0.0);
         |)
       | LatinFont(f) -> f
     in
@@ -369,17 +418,30 @@ end = struct
     let () = ref-kihonhanmen <- (|
     |) in
     let pagestyle pbinfo = 
+      let ctx = get-standard-context text-width in
       let (h,f) = 
         if config#twoside && (pbinfo#page-number mod 2 == 0) then 
           (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
         else
           (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
       in
-      let hc = h (get-standard-context text-width) pbinfo in
-      let fc = f (get-standard-context text-width) pbinfo in
+      let hc = h ctx pbinfo in
+      let fc = f ctx pbinfo in
       let xpoint = get-left-margin pbinfo#page-number in
+      % フロートボックスの構築
+      let (output-float-boxes,rest-float) = List.fold-left (fun (o,r)  (page,box) -> (
+        if page < pbinfo#page-number then
+          let b = line-break true true (set-paragraph-margin 0pt 12pt ctx)
+            (inline-fil ++ (embed-block-top ctx text-width (fun _ -> box) ++ inline-fil))
+          in
+          (o +++ b,r)
+        else
+          (o,(page,box) :: r)
+      )) (block-nil,[]) !ref-float-boxes
+      in
+      let () = ref-float-boxes <- rest-float in
       (|
-        header-content = hc;
+        header-content = hc +++ output-float-boxes;
         header-origin = (xpoint,top-space -' head-sep -' head-height);
         footer-content = fc;
         footer-origin = (xpoint,paper-height -' bottom-space +' head-sep);

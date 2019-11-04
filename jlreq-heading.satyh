@@ -1,4 +1,5 @@
 @require: list
+@require: option
 @import: jlreq-base
 @import: jlreq-font
 @import: jlreq-mark
@@ -87,11 +88,7 @@ end = struct
         in
         hook-page-break hookfunc
     in
-    let tocheading =
-      match runninghead with
-      |None -> heading
-      |Some(s) -> s
-    in
+    let tocheading = Option.from heading runninghead in
     let i-label = config#label-format !counter in
     let register-mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
@@ -211,11 +208,7 @@ end = struct
       )
     in
     let i-label = config#label-format !counter in
-    let markhead =
-      match runhead with
-      |None -> heading
-      |Some(h) -> h
-    in
+    let markhead = Option.from heading runhead in
     let mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
        (JLReqMark.set-mark config#mark-index (config#mark-format i-label markhead))
