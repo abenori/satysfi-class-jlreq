@@ -72,11 +72,12 @@ module JLReq : sig
     |) -> config ?-> (|
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     |) ?-> block-text -> document
-  val \space : [zw-or-length] inline-cmd
+  val \hspace : [zw-or-length] inline-cmd
   direct +p : [inline-text] block-cmd
   direct +part : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +subsection : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
+  direct +paragraph : [string?; inline-text?; inline-text; inline-text] block-cmd
   
   direct \ref : [string] inline-cmd
   direct \ref-page : [string] inline-cmd
@@ -119,52 +120,12 @@ end = struct
   let-inline ctx \ref-page l = output-cross-reference ctx (l ^ `:page`)
   
   %. スペース
-  let-inline ctx \space len =
+  let-inline ctx \hspace len =
     let l = match len with
       | ZW(n) -> (get-font-size ctx) *' n
       | Length(l) -> l
     in
     inline-skip l
-  
-%  let-rec string-to-int s =
-%    let len = string-length s in
-%    if len == 0 then Some(0) else
-%      let last-char = string-sub s (len - 1) 1 in
-%      let n = 
-%        match last-char with
-%        |`0` -> Some(0)
-%        |`1` -> Some(1)
-%        |`2` -> Some(2)
-%        |`3` -> Some(3)
-%        |`4` -> Some(4)
-%        |`5` -> Some(5)
-%        |`6` -> Some(6)
-%        |`7` -> Some(7)
-%        |`8` -> Some(8)
-%        |`9` -> Some(9)
-%        |_ -> None
-%      in
-%      match n with 
-%      |None -> None
-%      |Some(m) ->
-%        let k = string-to-int (string-sub s 0 (len - 1)) in
-%        match k with
-%        |None -> None
-%        |Some(l) -> Some(10 * l + m)
-%
-%  let-mutable ref-auto-reference-number <- 0
-%  let get-auto-reference-label = `jlreq-auto-reference:` ^ (arabic !ref-auto-reference-number)
-%  let current-page =
-%    let () = ref-auto-reference-number <- !ref-auto-reference-number + 1 in
-%    let opt = get-cross-reference get-auto-reference-label in
-%    let curpage = 
-%      match opt with
-%      |None -> None
-%      |Some(s) -> string-to-int s
-%    in
-%    let hookfunc pbinfo point = register-cross-reference get-auto-reference-label (arabic pbinfo#page-number) in
-%    let box = hook-page-break hookfunc in
-%    (curpage,box)
   
   %. 基本版面保持
   let-mutable ref-kihonhanmen <- (|
@@ -178,9 +139,15 @@ end = struct
     )) 0pt
   
   
+  %. 見出し
   let-mutable part-counter <- 0
   let-mutable section-counter <- 0
   let-mutable subsection-counter <- 0
+  let-mutable paragraph-counter <- 0
+  let part-mark-index = -1
+  let section-mark-index = 0
+  let subsection-mark-index = 1
+  let paragraph-mark-index = 2
   let-block ctx +part =
     JLReqHeading.blockheading-scheme (|
       font = Sans(ZW(1.7));
@@ -196,8 +163,8 @@ end = struct
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
       reset-counters = [];    
-      mark-index = -1;
-      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
+      mark-index = part-mark-index;
+      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
       clear-mark-indices = [];
     |) part-counter ctx
   let-block ctx +section =
@@ -214,10 +181,10 @@ end = struct
       after-label-space = ZW(1.0);
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
-      reset-counters = [subsection-counter];
-      mark-index = 0;
-      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
-      clear-mark-indices = [1];
+      reset-counters = [subsection-counter; paragraph-counter];
+      mark-index = section-mark-index;
+      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+      clear-mark-indices = [subsection-mark-index];
     |) section-counter ctx
   
   let-block ctx +subsection =
@@ -234,11 +201,24 @@ end = struct
       after-label-space = ZW(1.0);
       second-heading-text-indent = (false,ZW(1.0));
       subtitle-indent = SubTitleIndent(false,ZW(1.0));
-      reset-counters = [];
-      mark-index = 1;
-      mark-format = (fun cnt txt -> {#cnt;\space(ZW(1.0));#txt;});
+      reset-counters = [paragraph-counter];
+      mark-index = subsection-mark-index;
+      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
       clear-mark-indices = [];
     |) subsection-counter ctx
+    let-block ctx +paragraph =
+      JLReqHeading.runinheading-scheme (|
+        font = Sans(ZW(1.0));
+        indent = Length(0pt);
+        after-label-space = ZW(1.0);
+        after-space = ZW(1.0);
+        label-format = (fun cnt -> embed-string ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
+        reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
+        mark-index = paragraph-mark-index;
+        mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+        clear-mark-indices = [];
+        reset-counters = [];
+      |) paragraph-counter ctx
 
 
   let-mutable ref-footnote-counter <- 0
@@ -411,7 +391,6 @@ end = struct
       |> set-paragraph-margin config#line-gap config#line-gap
     in
     let main-block = read-block ctx-doc inner in
-    % dummy
     let title-b = 
       if record#show-title then formats#maketitle ctx-doc record#title record#author record#date
       else block-nil

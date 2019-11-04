@@ -135,17 +135,17 @@ end = struct
     let get-running-head format =
       match format with
       | PageStyleFirstMark(n) -> (fun pbinfo -> (
-        match JLReqMark.get-first n pbinfo#page-number with
+        match JLReqMark.get-first-mark n pbinfo#page-number with
         |None -> {}
         |Some(m) -> m
       ))
       | PageStyleBotMark(n) ->  (fun pbinfo -> (
-        match JLReqMark.get-last n pbinfo#page-number with
+        match JLReqMark.get-last-mark n pbinfo#page-number with
         |None -> {}
         |Some(m) -> m
       ))
       | PageStyleTopMark(n) ->  (fun pbinfo -> (
-        match JLReqMark.get-last n (pbinfo#page-number - 1) with
+        match JLReqMark.get-last-mark n (pbinfo#page-number - 1) with
         |None -> {}
         |Some(m) -> m
       ))
