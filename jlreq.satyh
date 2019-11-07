@@ -12,7 +12,7 @@ type kihon-hanmen-horizontal =
   | HorizontalAuto
   | HorizontalCenter of zw-or-length
   | Gutter of (|
-      block-length : zw-or-length;
+      line-length : zw-or-length;
       gutter : zw-or-length;
    |)
   | GutterFore-edge of (|
@@ -24,7 +24,7 @@ type kihon-hanmen-vertical =
    | VerticalAuto
    | VerticalCenter of zw-or-length
    | Top of (|
-       line-length : zw-or-length;
+       block-length : zw-or-length;
        top-space : zw-or-length;
      |)
    | TopBottom of (|
@@ -373,7 +373,7 @@ end = struct
         let m = (paper-width -' len) *' 0.5 in
         (m,m)
       | Gutter(gd) -> 
-        let len = zw-or-length-to-length gd#block-length in
+        let len = zw-or-length-to-length gd#line-length in
         let gutter = zw-or-length-to-length gd#gutter in
         (gutter,paper-width -' len -' gutter)
       | GutterFore-edge(gfe) ->
@@ -392,7 +392,7 @@ end = struct
         (s,s)
       | Top(td) ->
         let top-space = zw-or-length-to-length td#top-space in
-        let len = zw-or-length-to-length td#line-length in
+        let len = zw-or-length-to-length td#block-length in
         (top-space,paper-height -' len -' top-space)
       | TopBottom(tbd)->
         let top-space = zw-or-length-to-length tbd#top-space in
