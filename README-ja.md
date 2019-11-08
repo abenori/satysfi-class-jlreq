@@ -28,7 +28,7 @@ type zw-or-length =
 ```
 です．`Current`はフォントの変更を行いません．`CurrenType(n)`はフォントサイズを`n`に変更します．`Roman(n)`，`Sans(n)`，`Italic(n)`はそれぞれ立体，イタリック，サンセリフ/ゴシックです．`n`はフォントのサイズを表します．`Font`ではフォント自身を直接指定します．
 
-## 関数たち．
+## 文書作成用の関数たち．
 
 ### `document : 'a -> config ?-> 'b ?-> block-boxes -> document`
 メインとなる関数です．`'a`は
@@ -132,7 +132,9 @@ type config-cjkfont =
 
 #### `latin-font`
 欧文フォントを指定します．`config-latinfont`は
-```type config-latinfont = 
+
+```
+type config-latinfont = 
   | LatinFont-preset-lmodern of float
   | LatinFont of (|
     roman : string * float * float;
@@ -140,6 +142,7 @@ type config-cjkfont =
     sans : string * float * float;
   |)
 ```
+
 と定義されています．`LatinFont-preset-lmodern(n)`とすると，`font-size`で指定した値の`n`倍のサイズのLatin Modernを使います．`LatinFont`は直接指定です．
 
 ### `+p : [inline-text] block-cmd`
@@ -172,8 +175,95 @@ type config-cjkfont =
 ### `\figure : [string?; inline-text; block-text] inline-cmd`
 図の配置を行います．`\figure ?:label caption innner`で使います．`label`は相互参照のためのラベルです．`caption`ではキャプションを指定します．`innner`で図を出力します．
 
+## マーク機構
+TeXでいうmarkの機構を実現するために以下の関数があります．
 
+### `JLReqMark.set-mark : int -> inline-text -> inline-boxes`
+`JLReqMark.set-mark index text`の戻り値が埋め込まれた場所で`index`番目のマークを`text`に設定します．`hook-page-break`での設定です．
 
+### `JLReqMark.get-first-mark : int -> int -> inline-text option`
+`JLReqMark.set-mark index pageno`で，`pageno`ページで設定された`index`番目の最初のマークを取得します．`index`番目のマークが一切設定されていなければ`None`が返ります．
+
+### `JLReqMark.get-last-mark : int -> int -> inline-text option`
+`JLReqMark.set-mark index pageno`で，`pageno`ページで設定された`index`番目の最後のマークを取得します．`index`番目のマークが一切設定されていなければ`None`が返ります．
+
+## スタイル調整用関数
+例えば以下の`JLReqHeading.blockheading-scheme`を使い，
+```
+let-mutable section-counter <- 0
+let-block ctx +section = JLReqHeading.blockheading-scheme (|
+<設定>
+|) ctx section-counter
+```
+とすれば，新しいスタイルの`+section`を使うことができます．（内部では`+section`はこのように作られています．）
+
+### `JLReqHeading.blockheading-scheme 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes`
+別行見出しを作成します．`JLReqHeading.blockheading-scheme config counter ctx`とすると，`+section`と同様の書式の関数となります．`counter`はこの見出しの番号のカウンタです．`config`の型は
+```
+(|
+  font : nfss;
+  label-font : nfss;
+  subtitle-font : nfss;
+  gyodori : blockheading-gyodori;
+  label-format : int -> inline-text;
+  reference-label-format : int -> string;
+  subtitle-format : inline-text -> inline-text;
+  indent : zw-or-length;
+  end-indent : zw-or-length;
+  after-label-space : zw-or-length;
+  second-heading-text-indent : bool * zw-or-length;
+  subtitle-indent : blockheading-subtitle-indent;
+  reset-counters : (int ref) list;
+  mark-index : int;
+  clear-mark-indices : int list;
+  mark-format : inline-text -> inline-text -> inline-text;
+|)
+```
+で，細かいスタイルなどをここで調整します．
+
+* `font`：全体のフォントを指定します．
+* `label-font`：ラベルのフォントを指定します．
+* `subtitle-font`：副題のフォントを指定します．
+* `gyodori`：前後の空きを指定します．．型`blockheading-gyodori`は
+
+    ```
+    type blockheading-gyodori = 
+      | GyodoriCenter of float
+      | BeforeLines of float * float
+      | BeforeLength of float * length
+      | AfterLines of float * float
+      | AfterLength of float * length
+      | Absolute of length * length
+    ```
+
+    と定義されています．
+    - `GyodoriCenter(n)`：`n`行取りし，その中央に配置します．
+    - `BeforeLines(n,l)`：`n`行取りし，さらにその前に`l`行空きを入れます．
+    - `BeforeLength(n,l)`：`n`行取りしますが，前方の空きを`l`に固定します．
+    - `AfterLines(n,l)`：`n`行取りし，さらにその後に`l`行空きを入れます．
+    - `AfterLength(n,l)`：`n`行取りしますが，後方の空きを`l`に固定します．
+    - `Absolute(l1,l2)`：前方の空きを`l1`，後方の空きを`l2`に固定します．
+
+* `label-format`：ラベルの形式を指定します．カウンタの値を受け取り`inline-text`を返します．
+* `reference-label-format`：`\ref`などによる引用の際のラベルの形式を指定します．
+* `subtitle-format`：副題の形式を指定します．
+* `indent`：見出しの字下げ量を指定します．
+* `end-indent`：見出しの地上げ量を指定します．
+* `after-label-space`：ラベル直後の空きを指定します．
+* `second-heading-text-indent`：見出し文字列が二行に渡った際に，二行以降の字下げ量を指定します．`second-heading-text-indent = (b,l)`とすると字下げ量を`l`にします．`b`が`true`ならばラベル頭を起点とした字下げ量になります．`false`ならば見出し文字列の頭を起点とします．
+* `subtitle-indent`：副題のインデントです．型`blockheading-subtitle-indent`は
+
+    ````
+    type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * zw-or-length
+    ````
+    
+    と定義されています．`SubTitleNoBreak`を指定すると見出し文字列の直後，副題の直前では改行をしません．この場合インデント量は`second-heading-text-indent`のものが使われます．`SubTitleIndent(b,l)`とすると，副題直前で改行され，副題の字下げ量が`l`となります．`b`の意味は`second-heading-text-indent`と同様です．
+    
+* `reset-counters`：この関数が呼ばされた際にリセットするカウンタの一覧をリストで渡します．例えば`+section`ではより下位の`+subsection`のカウンタをリセットするために，ここに`+subsection`のカウンタである`subsection-counter`が渡されています．
+
+* `mark-index`：個々に指定された番号のマークに乱し文字列を設定します．
+* `clear-mark-indices`：マークを空文字に設定する番号のリストを指定します．
+* `mark-format`：マークに設定する形式を指定します．`mark-format label heading`の形で呼ばれ，戻り値がマークに設定されます．`label`はラベル，`heading`は見出し文字列です．
 
 
 
