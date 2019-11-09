@@ -28,6 +28,9 @@ type zw-or-length =
 ```
 です．`Current`はフォントの変更を行いません．`CurrenType(n)`はフォントサイズを`n`に変更します．`Roman(n)`，`Sans(n)`，`Italic(n)`はそれぞれ立体，イタリック，サンセリフ/ゴシックです．`n`はフォントのサイズを表します．`Font`ではフォント自身を直接指定します．
 
+#### `page-info`
+現在は`(|page-number : int|)`です．プリミティヴ`page-break`の第二引数に与えられる引数の型です．
+
 ## 文書作成用の関数たち．
 
 ### `document : 'a -> config ?-> 'b ?-> block-boxes -> document`
@@ -175,7 +178,7 @@ type config-latinfont =
 ### `\figure : [string?; inline-text; block-text] inline-cmd`
 図の配置を行います．`\figure ?:label caption innner`で使います．`label`は相互参照のためのラベルです．`caption`ではキャプションを指定します．`innner`で図を出力します．
 
-## マーク機構
+## マーク
 TeXでいうmarkの機構を実現するために以下の関数があります．
 
 ### `JLReqMark.set-mark : int -> inline-text -> inline-boxes`
@@ -187,6 +190,73 @@ TeXでいうmarkの機構を実現するために以下の関数があります�
 ### `JLReqMark.get-last-mark : int -> int -> inline-text option`
 `JLReqMark.set-mark index pageno`で，`pageno`ページで設定された`index`番目の最後のマークを取得します．`index`番目のマークが一切設定されていなければ`None`が返ります．
 
+## ページスタイル
+以下でヘッダとフッタの変更ができます．LaTeXの`\pagestyle`をまねています．
+
+* `register-pagestyle-inline : pagestyle -> inline-boxes`：戻り値が埋め込まれた場所でヘッダとフッタの変更を行います．
+* `register-pagestyle : pagestyle -> unit`：その場でヘッダとフッタの変更を行います．おもにプリアンブルで使います．
+
+型`pagestyle`は
+
+```
+type pagestyle = (|
+  odd-header : (context -> page-info -> block-boxes);
+  even-header : (context -> page-info -> block-boxes);
+  odd-footer : (context -> page-info -> block-boxes);
+  even-footer : (context -> page-info -> block-boxes);
+|)
+```
+と定義されています．
+
+各々の関数を手で設定してもよいですが，
+
+```
+val pagestyle-scheme : 
+  nombre : ((|
+    position : pagestyle-position;
+    nombre : (page-info -> inline-text);
+    font : nfss;
+  |)) list;
+  running-head : ((|
+    position : pagestyle-position;
+    font : nfss;
+    odd : pagestyle-runninghead;
+    even : pagestyle-runninghead;
+  |)) list;
+|) -> pagestyle
+```
+を使ってページスタイルを生成することもできます．
+
+`nombre`および`running-head`はそれぞれノンブルおよび柱の出力に関する設定です．いずれもリストで与えることで任意個数の指定ができます．（通常はどちらも一つでしょう．）
+
+* `font`：フォントを指定します．
+* `position`：`pagestyle-position`は
+
+    ````
+    type pagestyle-position = 
+      PageStyleBottomCenter |
+      PageStyleBottomLeft |
+      PageStyleBottomRight |
+      PageStyleTopCenter |
+      PageStyleTopLeft |
+      PageStyleTopRight
+    ````
+    
+    と定義されています．ノンブルや柱の出力位置を指定します．
+
+* `nombre#nombre`：ページ数の出力形式を，`page-info`を受け取る関数として設定します．
+* `running-head#odd`，`running-head#even`：奇数ページおよび偶数ページの柱の内容を指定します．`pagestyle-runninghead`は
+    
+    ```
+    type pagestyle-runninghead = 
+      PageStyleFirstMark of int |
+      PageStyleBotMark of int |
+      PageStyleTopMark of int |
+      PageStyleFormat of (page-info -> inline-text)
+    ```
+    
+    と定義されています．`PageStyleFormat(f)`を指定した場合は`f`の戻り値が柱になります．`PageStyleFirstMark(n)`，`PageStyleBotMark(n)`，`PageStyleTopMark(n)`は`n`番目の，それぞれ現在ページの最初，現在ページの最後，前のページの最後でのマークを出力します．後の`blockheading-scheme`などとあわせることで見出し文字列を柱として出力できるようになります．
+
 ## スタイル調整用関数
 例えば以下の`JLReqHeading.blockheading-scheme`を使い，
 ```
@@ -197,7 +267,7 @@ let-block ctx +section = JLReqHeading.blockheading-scheme (|
 ```
 とすれば，新しいスタイルの`+section`を使うことができます．（内部では`+section`はこのように作られています．）
 
-### `JLReqHeading.blockheading-scheme 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes`
+#### `JLReqHeading.blockheading-scheme 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes`
 別行見出しを作成します．`JLReqHeading.blockheading-scheme config counter ctx`とすると，`+section`と同様の書式の関数となります．`counter`はこの見出しの番号のカウンタです．`config`の型は
 ```
 (|
@@ -264,6 +334,47 @@ let-block ctx +section = JLReqHeading.blockheading-scheme (|
 * `mark-index`：個々に指定された番号のマークに乱し文字列を設定します．
 * `clear-mark-indices`：マークを空文字に設定する番号のリストを指定します．
 * `mark-format`：マークに設定する形式を指定します．`mark-format label heading`の形で呼ばれ，戻り値がマークに設定されます．`label`はラベル，`heading`は見出し文字列です．
+
+#### `runinheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes`
+同行見出しです．副題が指定できない他は別行見出しと同様です．`'a`は
+```
+(|
+  font : nfss;
+  indent : zw-or-length;
+  after-label-space : zw-or-length;
+  after-space : zw-or-length;
+  label-format : int -> inline-text;
+  reference-label-format : int -> string;
+  mark-index : int;
+  mark-format : inline-text -> inline-text -> inline-text;
+  clear-mark-indices : int list;
+  reset-counters : (int ref) list;
+|)
+```
+で，`after-space`以外は`blockheading-scheme`と同じ意味を持ちます．`after-space`は見出し文字列と本文との間の空きを指定します．
+
+
+#### `JLReqFootnote.footnote-scheme : 'a -> int ref -> context -> inline-text -> inline-boxes`
+脚注を作ります．`JLReqFootnote.footnote-scheme config counter ctx text`で，`text`を脚注に追加します．`counter`は脚注番号を表すカウンターです．`config`は
+```
+(|
+  reference-mark-type : reference-mark-type;
+  reference-mark-format : int -> inline-text;
+  reference-mark-font : nfss;
+  font : nfss;
+  line-gap : zw-or-length;
+  indent : zw-or-length;
+  second-indent : zw-or-length;
+|)
+```
+
+* `reference-mark-type`：合印の配置方法です．`reference-mark-type`は`Interlinear | Inline`と定義されています．`Interlinear`を指定すると該当項目の真上に配置します．`Inline`を指定すると該当項目後ろの行中に配置します．
+* `reference-mark-format`：合印のフォーマットです．カウンタを受け取り実際の出力を返します．
+* `reference-mark-font`：合印のフォントを指定します．
+* `font`：脚注のフォントです．
+* `line-gap`：脚注の行間です．
+* `indent`：脚注のインデントを指定します．
+* `second-indent`：脚注の二行目以降のインデントを指定します．一行目からの相対位置です．
 
 
 
