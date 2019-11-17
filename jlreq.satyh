@@ -2,6 +2,7 @@
 @require: option
 @require: list
 @require: math
+@import: jlreq-lib
 @import: jlreq-base
 @import: jlreq-font
 @import: jlreq-heading
@@ -117,6 +118,8 @@ end = struct
       | USLetter -> (8.5inch,11inch)
       | UserDefinedPaper(w,h) -> (w,h)
   
+  let-mutable ref-autoreference-counter <- 0
+  
   %. 相互参照系
   let output-cross-reference ctx l =
     let ref-txt = 
@@ -142,10 +145,8 @@ end = struct
   
   %. フロート
   let-mutable ref-float-boxes <- []
-  let height-of-float-boxes pageno =
-    (!ref-float-boxes) |> List.fold-left (fun h (pn, bb) -> (
-      if pn < pageno then h +' (get-natural-length bb) else h
-    )) 0pt
+  let-mutable ref-no-float-pages <- []
+  let float-margin = ZW(1.2)
   let float-scheme config counter ctx ?:label caption inner =
     let () = counter <- !counter + 1 in
     let () = match label with
@@ -171,9 +172,25 @@ end = struct
         (line-break true true ctx (inline-fil ++ b-caption ++ inline-fil))
       ))
     in
-      hook-page-break (fun pbinfo _ -> (
-        ref-float-boxes <- (pbinfo#page-number, bb-inner) :: !ref-float-boxes
-      ))
+    let () = ref-autoreference-counter <- !ref-autoreference-counter + 1 in
+    let curpage-label = `footnote-scheme-auto-reference:` ^ (arabic !ref-autoreference-counter) in
+    let curpage = 
+      match get-cross-reference curpage-label with
+      | None -> None
+      | Some(s) -> (JLReqLib.string-to-int s)
+    in
+    let hook pbinfo _ =
+      let () = register-cross-reference curpage-label (arabic pbinfo#page-number) in
+      match curpage with
+      | None -> (ref-float-boxes <- (pbinfo#page-number + 1,bb-inner) :: !ref-float-boxes)
+      | Some(_) -> ()
+    in
+    let () =
+      match curpage with
+      | None -> ()
+      | Some(p) -> (ref-float-boxes <- (p,bb-inner) :: !ref-float-boxes)
+    in
+    hook-page-break hook
   
   let-mutable figure-counter <- 0
   let-inline ctx \figure = float-scheme (|
@@ -405,12 +422,28 @@ end = struct
       else
         odd-left-margin
     in
+    let max-float-height = (paper-height -' top-space -' bottom-space) *' 0.5 in
+    let is-no-float-page pbinfo =
+      List.fold-left (fun b p -> (if p == pbinfo#page-number then true else b)) false !ref-no-float-pages
+    in
+    let height-of-float-boxes pbinfo =
+      if is-no-float-page pbinfo then (0pt,0)
+      else
+        (!ref-float-boxes) |> List.fold-left (fun (h,n) (pn, bb) -> (
+          if pn > pbinfo#page-number then (h,n)
+          else
+            let hh = h +' (get-natural-length bb) +' (zw-or-length-to-length float-margin) in
+            if hh <' max-float-height || n == 0 then (hh,n + 1)
+            else (h,n)
+        )) (0pt,0)
+    in
+    let () = if record#show-title then ref-no-float-pages <- 1 :: !ref-no-float-pages else () in
     let page-layout pbinfo =
-      let hgtfb = height-of-float-boxes pbinfo#page-number in
+      let (hofb,_) = height-of-float-boxes pbinfo in
       let xpoint = get-left-margin pbinfo#page-number in
       (|
-        text-origin = (xpoint,top-space +' hgtfb);
-        text-height = paper-height -' top-space -' bottom-space
+        text-origin = (xpoint,top-space +' hofb);
+        text-height = paper-height -' top-space -' bottom-space -' hofb;
       |)
     in
     let head-height = zw-or-length-to-length config#header-height in
@@ -429,15 +462,18 @@ end = struct
       let fc = f ctx pbinfo in
       let xpoint = get-left-margin pbinfo#page-number in
       % フロートボックスの構築
-      let (output-float-boxes,rest-float) = List.fold-left (fun (o,r)  (page,box) -> (
-        if page < pbinfo#page-number then
-          let b = line-break true true (set-paragraph-margin 0pt 12pt ctx)
-            (inline-fil ++ (embed-block-top ctx text-width (fun _ -> box) ++ inline-fil))
-          in
-          (o +++ b,r)
+      let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in
+      let (output-float-boxes,rest-float,_) = 
+        if is-no-float-page pbinfo then (block-nil,!ref-float-boxes,0)
         else
-          (o,(page,box) :: r)
-      )) (block-nil,[]) !ref-float-boxes
+        List.fold-right (fun (page,box) (o,r,n) -> (
+          if (n >= number-of-float-boxes || page > pbinfo#page-number) then (o,(page,box) :: r,n)
+          else
+            let b = line-break true true (set-paragraph-margin 0pt (zw-or-length-to-length float-margin) ctx)
+              (inline-fil ++ (embed-block-top ctx text-width (fun _ -> box) ++ inline-fil))
+            in
+            (o +++ b,r,n + 1)
+        )) (block-nil,[],0) !ref-float-boxes
       in
       let () = ref-float-boxes <- rest-float in
       (|
