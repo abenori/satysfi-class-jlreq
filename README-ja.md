@@ -193,8 +193,8 @@ TeXでいうmarkの機構を実現するために以下の関数があります�
 ## ページスタイル
 以下でヘッダとフッタの変更ができます．LaTeXの`\pagestyle`をまねています．
 
-* `register-pagestyle-inline : pagestyle -> inline-boxes`：戻り値が埋め込まれた場所でヘッダとフッタの変更を行います．
-* `register-pagestyle : pagestyle -> unit`：その場でヘッダとフッタの変更を行います．おもにプリアンブルで使います．
+* `JLReqPageStyle.register-pagestyle-inline : pagestyle -> inline-boxes`：戻り値が埋め込まれた場所でヘッダとフッタの変更を行います．
+* `JLReqPageStyle.register-pagestyle : pagestyle -> unit`：その場でヘッダとフッタの変更を行います．おもにプリアンブルで使います．
 
 型`pagestyle`は
 
@@ -211,7 +211,7 @@ type pagestyle = (|
 各々の関数を手で設定してもよいですが，
 
 ```
-val pagestyle-scheme : 
+val JLReqPageStyle.pagestyle-scheme : 
   nombre : ((|
     position : pagestyle-position;
     nombre : (page-info -> inline-text);
