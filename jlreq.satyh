@@ -376,8 +376,8 @@ end = struct
     let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
     let zw-or-length-to-length v = 
       match v with
-        | Length(l) -> l
-        | ZW(n) -> config#font-size *' n
+      | Length(l) -> l
+      | ZW(n) -> config#font-size *' n
     in
     let (odd-left-margin,odd-right-margin) = 
       match config#horizontal-layout with 

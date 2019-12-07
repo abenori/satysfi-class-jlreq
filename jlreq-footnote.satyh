@@ -40,7 +40,7 @@ end = struct
       inline-graphics 0pt 0pt 0pt draw
   
   let footnote-register-is-first-box label =
-    let hook pbinfo pt =
+    let hook pbinfo _ =
       let-rec is-first-search lst =
         match lst with
         | x :: xs ->
@@ -106,7 +106,10 @@ end = struct
         (deco, deco, deco, deco)
       in
       let output c =
-        let cc = set-leading (footnote-line-gap +' footnote-font-size) c in
+        let cc = c
+          |> JLReqFont.select-font config#font
+          |> set-leading (footnote-line-gap +' footnote-font-size)
+        in
         let rmb = read-inline cc (config#reference-mark-format !counter) in
         let (len,_,_) = get-natural-metrics rmb in
         let body = read-inline cc txt in
