@@ -2,12 +2,12 @@
 @require: option
 @require: list
 @require: math
-@import: jlreq-lib
-@import: jlreq-base
-@import: jlreq-font
-@import: jlreq-heading
-@import: jlreq-footnote
-@import: jlreq-pagestyle
+@import: jlreq/lib
+@import: jlreq/base
+@import: jlreq/font
+@import: jlreq/heading
+@import: jlreq/footnote
+@import: jlreq/pagestyle
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto

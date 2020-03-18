@@ -1,0 +1,84 @@
+@import: base
+
+type nfss = 
+  | Current
+  | CurrentType of zw-or-length
+  | Roman of zw-or-length
+  | Sans of zw-or-length
+  | Italic of zw-or-length
+  | Font of zw-or-length * (|
+    cjk : string * float * float;
+    latin : string * float * float;
+  |)
+
+module JLReqFont : sig
+  val register-font : length -> length -> (|
+    cjk : (|
+      mincho : string * float * float;
+      gothic : string * float * float;
+    |);
+    latin : (|
+      roman : string * float * float;
+      italic : string * float * float;
+      sans : string * float * float;
+    |);
+  |) -> unit
+  val select-font : nfss -> context -> context
+  val font-size : length
+  val line-gap : length
+end = struct
+  % font-size, line-gap, fontたち
+  let-mutable ref-font <- (10pt,7pt,(|
+    cjk = (|mincho = (`ipaexm`,1.0,0.0); gothic = (`ipaexg`,1.0,0.0);|);
+    latin = (|roman = (`lmroman`,1.0,0.0); italic = (`lmroman-it`,1.0,0.0); sans = (`lmroman-b`,1.0,0.0);|);
+  |))
+  
+  let register-font font-size line-gap fonts =
+    ref-font <- (font-size,line-gap,fonts)
+  
+  let font-size = 
+    let (fs,_,_) = !ref-font in
+    fs
+  let line-gap = 
+    let (_,lg,_) = !ref-font in
+    lg
+  
+  let select-font f ctx  =
+    let (font-size,line-gap,font) = !ref-font in
+    let set-font-size-line-gap ncl ctx =
+      let (fs,lg) = 
+        match ncl with
+        | ZW(n) -> (font-size *' n,line-gap *' n)
+        | Length(l) -> (l,line-gap *' (l /' font-size))
+      in
+      ctx
+      |> set-font-size fs
+      |> set-leading (fs +' lg)
+      |> set-paragraph-margin lg lg
+    in
+    match f with
+    | Current -> ctx
+    | CurrentType(n) -> ctx
+      |> set-font-size-line-gap n
+    | Roman(n) -> ctx
+      |> set-font-size-line-gap n
+      |> set-font Kana font#cjk#mincho
+      |> set-font HanIdeographic font#cjk#mincho
+      |> set-font Latin font#latin#roman
+    | Sans(n) -> ctx
+      |> set-font-size-line-gap n
+      |> set-font Kana font#cjk#gothic
+      |> set-font HanIdeographic font#cjk#gothic
+      |> set-font Latin font#latin#sans
+    | Italic(n) -> ctx
+      |> set-font-size-line-gap n
+      |> set-font Kana font#cjk#mincho
+      |> set-font HanIdeographic font#cjk#mincho
+      |> set-font Latin font#latin#italic
+    | Font(size,f) -> ctx
+      |> set-font-size-line-gap size
+      |> set-font Kana f#cjk
+      |> set-font HanIdeographic f#cjk
+      |> set-font Latin f#latin
+  
+end
