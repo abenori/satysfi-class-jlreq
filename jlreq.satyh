@@ -59,10 +59,12 @@ type config = (|
   font-size : length;
   cjk-font : config-cjkfont;
   latin-font : config-latinfont;
+  column : int;
+  column-gap : zw-or-length;
 |)
 
 module JLReq : sig
-  val default-config : config
+  val default-document-config : config
 
   val document : (|
       title : inline-text;
@@ -93,7 +95,7 @@ module JLReq : sig
   direct \footnote : [inline-text] inline-cmd
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
-  let default-config = (|
+  let default-document-config = (|
     twoside = false;
     paper-size = A4Paper;
     horizontal-layout = HorizontalAuto;
@@ -104,6 +106,8 @@ end = struct
     line-gap = 7pt;
     cjk-font = CJKFont-preset-ipaex(1.0);
     latin-font = LatinFont-preset-lmodern(1.0);
+    column = 1;
+    column-gap = ZW(2.0);
   |)
   
   let paper-size-to-width-height ps = 
@@ -332,8 +336,15 @@ end = struct
   
   %. document
   let document record ?:configopt ?:formatopt inner =
-    let config = Option.from default-config configopt in
+    let config = Option.from default-document-config configopt in
     let formats = Option.from default-format formatopt in
+    % check column
+    let () = 
+      if (config#column <> 1) && (config#column <> 2) then
+        abort-with-message `Only column = 1 or column = 2 is supported`
+      else
+        ()
+    in
     % フォント設定
     let cjkfont = 
       match config#cjk-font with
@@ -379,6 +390,7 @@ end = struct
       | Length(l) -> l
       | ZW(n) -> config#font-size *' n
     in
+    let column-gap = zw-or-length-to-length config#column-gap in
     let (odd-left-margin,odd-right-margin) = 
       match config#horizontal-layout with 
       | HorizontalAuto -> 
@@ -390,7 +402,7 @@ end = struct
         let m = (paper-width -' len) *' 0.5 in
         (m,m)
       | Gutter(gd) -> 
-        let len = zw-or-length-to-length gd#line-length in
+        let len = ((zw-or-length-to-length gd#line-length) *' (float config#column)) +'  (column-gap *' (float (config#column - 1))) in
         let gutter = zw-or-length-to-length gd#gutter in
         (gutter,paper-width -' len -' gutter)
       | GutterFore-edge(gfe) ->
@@ -399,7 +411,7 @@ end = struct
         (gutter,fore-edge)
     in
     % 1.0ptはおまじない……
-    let text-width = paper-width -' odd-left-margin -' odd-right-margin +' 1.0pt in
+    let text-width = (paper-width -' odd-left-margin -' odd-right-margin +' 1.0pt -' (column-gap *' (float (config#column - 1)))) *' (1.0 /. (float config#column)) in
     let (top-space,bottom-space) = 
       match config#vertical-layout with
       | VerticalAuto -> (paper-height *' 0.125,paper-height *' 0.125)
@@ -493,7 +505,12 @@ end = struct
       if record#show-title then formats#maketitle ctx-doc record#title record#author record#date
       else block-nil
     in
-    let doc = page-break config#paper-size page-layout pagestyle (title-b +++ main-block) in
+    let doc = 
+      if config#column == 1 then
+        page-break config#paper-size page-layout pagestyle (title-b +++ main-block)
+      else
+        page-break-two-column config#paper-size (text-width +' column-gap) (fun () -> block-nil) page-layout pagestyle (title-b +++ main-block) 
+    in
     doc
 
 end
