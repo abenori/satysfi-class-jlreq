@@ -3,6 +3,7 @@
 @import: base
 @import: font
 @import: mark
+@import: toc
 
 type blockheading-gyodori = 
   | GyodoriCenter of float
@@ -15,8 +16,9 @@ type blockheading-gyodori =
 type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * zw-or-length
 
 module JLReqHeading : sig
-  val blockheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+  val block-heading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
+      level : int;
       font : nfss;
       label-font : nfss;
       subtitle-font : nfss;
@@ -31,13 +33,14 @@ module JLReqHeading : sig
       second-heading-text-indent : bool * zw-or-length;
       subtitle-indent : blockheading-subtitle-indent;
       reset-counters : (int ref) list;
-      mark-index : int;
       clear-mark-indices : int list;
       mark-format : inline-text -> inline-text -> inline-text;
+      add-to-toc : bool;
     |)
 
-  val blockheading-scheme-nocounter : 'a -> context -> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+  val block-heading-scheme-nocounter : 'a -> context -> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
+      level : int;
       font : nfss;
       subtitle-font : nfss;
       gyodori : blockheading-gyodori;
@@ -46,27 +49,35 @@ module JLReqHeading : sig
       end-indent : zw-or-length;
       second-heading-text-indent : zw-or-length;
       subtitle-indent : blockheading-subtitle-indent;
-      mark-index : int;
       clear-mark-indices : int list;
       mark-format : inline-text -> inline-text;
+      add-to-toc : bool;
     |)
 
-  val runinheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes
+  val run-in-heading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes
     constraint 'a :: (|
+      level : int;
       font : nfss;
       indent : zw-or-length;
       after-label-space : zw-or-length;
       after-space : zw-or-length;
       label-format : int -> inline-text;
       reference-label-format : int -> string;
-      mark-index : int;
       mark-format : inline-text -> inline-text -> inline-text;
       clear-mark-indices : int list;
       reset-counters : (int ref) list;
+      add-to-toc : bool;
     |)
 end = struct
+  let-inline ctx \hspace len =
+    let l = match len with
+      | ZW(n) -> (get-font-size ctx) *' n
+      | Length(l) -> l
+    in
+    inline-skip l
+
   %. 別行見出し
-  let blockheading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
+  let block-heading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
     let font-size = JLReqFont.font-size in
     let line-gap = JLReqFont.line-gap in
     let to-length l = match l with 
@@ -92,10 +103,16 @@ end = struct
     let i-label = config#label-format !counter in
     let register-mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
-       (JLReqMark.set-mark config#mark-index (config#mark-format i-label tocheading))
+       (JLReqMark.set-mark config#level (config#mark-format i-label tocheading))
        config#clear-mark-indices
     in
-    let label-box = register-mark-box ++
+    let toc-box = 
+      if config#add-to-toc then
+        JLReqTOC.add-contents-line config#level {#i-label;\hspace(config#after-label-space);#heading;}
+      else
+        inline-nil
+    in
+    let label-box = register-mark-box ++ toc-box ++
       hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) i-label) in
     let (label-length,_,_) = get-natural-metrics label-box in
     let heading-text-indent = 
@@ -165,7 +182,7 @@ end = struct
       heading-blockbox
       +++ (block-skip after-space)
     in
-%    % 改ページしないための処理（これでいいのかな？）
+    % 改ページしないための処理（これでいいのかな？）
     let target-txt = embed-block-breakable ctx final-box in
     let (w,h,d) = get-natural-metrics target-txt in
     line-break true false ctx (inline-graphics w h d (fun pt ->  [draw-text pt target-txt]))
@@ -173,8 +190,8 @@ end = struct
 
   let-mutable dummy-counter <- 0
 
-  let blockheading-scheme-nocounter config ctx =
-    blockheading-scheme (|
+  let block-heading-scheme-nocounter config ctx =
+    block-heading-scheme (|
       font = config#font;
       label-font = Roman(ZW(1.0));
       subtitle-font = config#subtitle-font;
@@ -188,12 +205,13 @@ end = struct
       second-heading-text-indent = (false,config#second-heading-text-indent);
       subtitle-indent = config#subtitle-indent;
       reset-counters = [];
-      mark-index = config#mark-index;
+      level = config#level;
       clear-mark-indices = config#clear-mark-indices;
       mark-format = (fun cnt txt -> config#mark-format txt);
+      add-to-toc = config#add-to-toc;
     |) dummy-counter ctx ?*
 
-  let runinheading-scheme config counter ctx ?:label ?:runhead heading inner =
+  let run-in-heading-scheme config counter ctx ?:label ?:runhead heading inner =
     let () = counter <- !counter + 1 in
     let _ = List.map (fun cnt -> (cnt <- 0)) config#reset-counters in
     let register-ref-box = 
@@ -211,7 +229,7 @@ end = struct
     let markhead = Option.from heading runhead in
     let mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
-       (JLReqMark.set-mark config#mark-index (config#mark-format i-label markhead))
+       (JLReqMark.set-mark config#level (config#mark-format i-label markhead))
        config#clear-mark-indices
     in
     let font-size = get-font-size ctx in
@@ -220,8 +238,14 @@ end = struct
       |ZW(n) -> font-size *' n
       |Length(l) -> l
     in
+    let toc-box = 
+      if config#add-to-toc then
+        JLReqTOC.add-contents-line config#level {#i-label;\hspace(config#after-label-space);#heading;}
+      else
+        inline-nil
+    in
     line-break true true ctx (
-      register-ref-box ++ mark-box ++ (inline-skip (to-length config#indent)) ++ 
+      register-ref-box ++ mark-box ++ toc-box ++ (inline-skip (to-length config#indent)) ++ 
       (read-inline (JLReqFont.select-font config#font ctx) i-label) ++
       (inline-skip (to-length config#after-label-space)) ++
       (read-inline (JLReqFont.select-font config#font ctx) heading) ++

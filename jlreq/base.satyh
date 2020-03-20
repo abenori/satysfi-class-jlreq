@@ -1,6 +1,2 @@
-type zw-or-length = 
-  | Length of length
-  | ZW of float
-
 type page-info = (|page-number : int|)
 

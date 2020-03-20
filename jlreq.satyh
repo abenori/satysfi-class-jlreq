@@ -8,6 +8,7 @@
 @import: jlreq/heading
 @import: jlreq/footnote
 @import: jlreq/pagestyle
+@import: jlreq/toc
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto
@@ -48,7 +49,7 @@ type config-latinfont =
     sans : string * float * float;
   |)
 
-type config = (|
+type config-document = (|
   twoside : bool;
   paper-size : page;
   horizontal-layout : kihon-hanmen-horizontal;
@@ -64,7 +65,7 @@ type config = (|
 |)
 
 module JLReq : sig
-  val default-document-config : config
+  val default-config-document : config-document
 
   val document : (|
       title : inline-text;
@@ -72,9 +73,9 @@ module JLReq : sig
       date : inline-text;
       show-toc : bool;
       show-title : bool;
-    |) -> config ?-> (|
+    |) -> config-document ?-> (|
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
-    |) ?-> block-text -> document
+    |) ?-> block-text ?-> block-text -> document
   val \hspace : [zw-or-length] inline-cmd
   val float-scheme : (|
     caption-font : nfss;
@@ -95,7 +96,7 @@ module JLReq : sig
   direct \footnote : [inline-text] inline-cmd
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
-  let default-document-config = (|
+  let default-config-document = (|
     twoside = false;
     paper-size = A4Paper;
     horizontal-layout = HorizontalAuto;
@@ -210,85 +211,88 @@ end = struct
   let-mutable section-counter <- 0
   let-mutable subsection-counter <- 0
   let-mutable paragraph-counter <- 0
-  let part-mark-index = -1
-  let section-mark-index = 0
-  let subsection-mark-index = 1
-  let paragraph-mark-index = 2
-  let-block ctx +part =
-    JLReqHeading.blockheading-scheme (|
-      font = Sans(ZW(1.7));
-      label-font = Current;
-      subtitle-font = Sans(ZW(1.4));
-      gyodori = GyodoriCenter(4.0);
-      label-format = (fun n -> embed-string (`第` ^ (arabic n) ^ `部`));
-      reference-label-format = (fun n -> arabic n);
-      subtitle-format = (fun s -> {—#s;—});
-      indent = Length(0pt);
-      end-indent = Length(0pt);
-      after-label-space = ZW(1.0);
-      second-heading-text-indent = (false,ZW(1.0));
-      subtitle-indent = SubTitleIndent(false,ZW(1.0));
-      reset-counters = [];    
-      mark-index = part-mark-index;
-      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-      clear-mark-indices = [];
-    |) part-counter ctx
-  let-block ctx +section =
-    JLReqHeading.blockheading-scheme (|
-      font = Sans(ZW(1.4));
-      label-font = Current;
-      subtitle-font = Sans(ZW(1.0));
-      gyodori = GyodoriCenter(3.0);
-      label-format = (fun n -> embed-string(arabic n));
-      reference-label-format = (fun n -> arabic n);
-      subtitle-format = (fun s -> {—#s;—});
-      indent = Length(0pt);
-      end-indent = Length(0pt);
-      after-label-space = ZW(1.0);
-      second-heading-text-indent = (false,ZW(1.0));
-      subtitle-indent = SubTitleIndent(false,ZW(1.0));
-      reset-counters = [subsection-counter; paragraph-counter];
-      mark-index = section-mark-index;
-      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-      clear-mark-indices = [subsection-mark-index];
-    |) section-counter ctx
-  
-  let-block ctx +subsection =
-    JLReqHeading.blockheading-scheme (|
-      font = Sans(ZW(1.2));
-      label-font = Current;
-      subtitle-font = Sans(ZW(1.0));
-      gyodori = GyodoriCenter(2.0);
-      label-format = (fun n -> embed-string((arabic !section-counter) ^ `.` ^ (arabic n)));
-      reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
-      subtitle-format = (fun s -> {—#s;—});
-      indent = Length(0pt);
-      end-indent = Length(0pt);
-      after-label-space = ZW(1.0);
-      second-heading-text-indent = (false,ZW(1.0));
-      subtitle-indent = SubTitleIndent(false,ZW(1.0));
-      reset-counters = [paragraph-counter];
-      mark-index = subsection-mark-index;
-      mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-      clear-mark-indices = [];
-    |) subsection-counter ctx
-    let-block ctx +paragraph =
-      JLReqHeading.runinheading-scheme (|
-        font = Sans(ZW(1.0));
-        indent = Length(0pt);
-        after-label-space = ZW(1.0);
-        after-space = ZW(1.0);
-        label-format = (fun cnt -> embed-string ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
-        reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
-        mark-index = paragraph-mark-index;
-        mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-        clear-mark-indices = [];
-        reset-counters = [];
-      |) paragraph-counter ctx
+  let part-level = -1
+  let section-levek = 0
+  let subsection-level = 1
+  let paragraph-level = 2
+  let default-config-part = (|
+    level = -1;
+    font = Sans(ZW(1.7));
+    label-font = Current;
+    subtitle-font = Sans(ZW(1.4));
+    gyodori = GyodoriCenter(4.0);
+    label-format = (fun n -> embed-string (`第` ^ (arabic n) ^ `部`));
+    reference-label-format = (fun n -> arabic n);
+    subtitle-format = (fun s -> {—#s;—});
+    indent = Length(0pt);
+    end-indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    second-heading-text-indent = (false,ZW(1.0));
+    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    reset-counters = [];    
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    clear-mark-indices = [];
+    add-to-toc = true;
+  |)
+  let-block ctx +part = JLReqHeading.block-heading-scheme default-config-part part-counter ctx
+  let default-config-subsection = (|
+    level = 1;
+    font = Sans(ZW(1.2));
+    label-font = Current;
+    subtitle-font = Sans(ZW(1.0));
+    gyodori = GyodoriCenter(2.0);
+    label-format = (fun n -> embed-string((arabic !section-counter) ^ `.` ^ (arabic n)));
+    reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
+    subtitle-format = (fun s -> {—#s;—});
+    indent = Length(0pt);
+    end-indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    second-heading-text-indent = (false,ZW(1.0));
+    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    reset-counters = [paragraph-counter];
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    clear-mark-indices = [];
+    add-to-toc = true;
+  |)
+  let-block ctx +subsection = JLReqHeading.block-heading-scheme default-config-subsection subsection-counter ctx
+  let default-config-section = (|
+    level = 0;
+    font = Sans(ZW(1.4));
+    label-font = Current;
+    subtitle-font = Sans(ZW(1.0));
+    gyodori = GyodoriCenter(3.0);
+    label-format = (fun n -> embed-string(arabic n));
+    reference-label-format = (fun n -> arabic n);
+    subtitle-format = (fun s -> {—#s;—});
+    indent = Length(0pt);
+    end-indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    second-heading-text-indent = (false,ZW(1.0));
+    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    reset-counters = [subsection-counter; paragraph-counter];
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    clear-mark-indices = [default-config-subsection#level];
+    add-to-toc = true;
+  |)
+  let-block ctx +section = JLReqHeading.block-heading-scheme default-config-section section-counter ctx
+  let default-config-paragraph = (|
+    level = 2;
+    font = Sans(ZW(1.0));
+    indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    after-space = ZW(1.0);
+    label-format = (fun cnt -> embed-string ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
+    reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    clear-mark-indices = [];
+    reset-counters = [];
+    add-to-toc = true;
+  |)
+  let-block ctx +paragraph = JLReqHeading.run-in-heading-scheme default-config-paragraph paragraph-counter ctx
 
 
   let-mutable ref-footnote-counter <- 0
-  let-inline ctx \footnote = JLReqFootnote.footnote-scheme (|
+  let default-config-footnote = (|
     reference-mark-type = Inline;
     reference-mark-font = Roman(ZW(0.6));
     font = Roman(ZW(0.8));
@@ -296,7 +300,8 @@ end = struct
     reference-mark-format = (fun n -> embed-string ((arabic n) ^ `)`));
     indent = Length(0pt);
     second-indent = ZW(1.0);
-  |) ref-footnote-counter ctx
+  |)
+  let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote ref-footnote-counter ctx
   
   %. 段落
   let-block ctx +p inner =
@@ -335,8 +340,8 @@ end = struct
   |)
   
   %. document
-  let document record ?:configopt ?:formatopt inner =
-    let config = Option.from default-document-config configopt in
+  let document record ?:configopt ?:formatopt ?:frontmatter inner =
+    let config = Option.from default-config-document configopt in
     let formats = Option.from default-format formatopt in
     % check column
     let () = 
@@ -505,11 +510,27 @@ end = struct
       if record#show-title then formats#maketitle ctx-doc record#title record#author record#date
       else block-nil
     in
+    let frontmatter-b =
+      match frontmatter with
+      | None -> block-nil
+      | Some(f) -> read-block ctx-doc f
+    in
+    let toc-b = 
+      if record#show-toc then 
+        let font = Sans(ZW(1.4)) in
+        block-skip (config#font-size) +++ 
+        line-break false false ctx-doc (read-inline (JLReqFont.select-font font ctx-doc) {目次} ++ inline-fil)  +++
+        block-skip (config#line-gap) +++ 
+        JLReqTOC.table-of-contents ctx-doc [] arabic +++
+        block-skip (config#font-size +' config#line-gap)
+      else
+        block-nil
+    in
     let doc = 
       if config#column == 1 then
-        page-break config#paper-size page-layout pagestyle (title-b +++ main-block)
+        page-break config#paper-size page-layout pagestyle (title-b +++ frontmatter-b +++ toc-b +++ main-block)
       else
-        page-break-two-column config#paper-size (text-width +' column-gap) (fun () -> block-nil) page-layout pagestyle (title-b +++ main-block) 
+        page-break-two-column config#paper-size (text-width +' column-gap) (fun () -> block-nil) page-layout pagestyle (title-b +++ frontmatter-b +++ toc-b +++ main-block) 
     in
     doc
 
