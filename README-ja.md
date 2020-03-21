@@ -1,380 +1,146 @@
 # jlreq for SATySFi
 
 ## 使い方
-### 基本的な型
-以下の型は多くの場所で使われます．
+基本的な使い方は，標準添付のStdJaなどと同様です．つまり
+```
+  @require jlreq
+  
+  document(|
+    title = {タイトル};
+    author = {著者};
+    date = {日付};
+    show-title = true; % タイトル表示
+    show-toc = false; % 目次非表示
+  |) '<
+    % ここから本文．
+    +section{はじめに}<
+      +p{最初の段落}
+    >
+  >
+```
+のようにします．文書の書き方は，The SATySFi bookなどをご覧ください．
+次の命令が定義されています．
 
-#### `zw-or-length`
-主に長さを表す型ですが，通常の長さによる指定の他，文書フォントサイズの`n`倍という指定が可能です．
-```
-type zw-or-length = 
-  | Length of length
-  | ZW of float
-```
-と定義されており，`Length(l)`で長さ`l`という指定，`ZW(n)`でフォントサイズの`n`倍という指定です．
+* `+p`: 段落を記述する．
+* `+pn`: インデントのない段落を記述する．
+* `+part`: 部の見出しです．``+part ?:(`ラベル`) ?:{柱用見出し} ?:{副題} {見出し} <本文>``のように使います．ラベルは相互参照のために`\ref`の引数などに入れます．柱用見出しは柱に出す文字列で，省略された場合は見出しそのものを使います．
+* `+section`，`+subsection`: `+part`より下位のレベルの見出しです．使い方は`+part`と同様．
+* `+paragraph`: `+subsection`の一つ下のレベルの見出しです．``+paragraph ?:(`ラベル`) ?:{柱用見出し} {見出し} <本文>``で使います．
+* `\ref`: `+section`などを参照します．文書内に``+\section ?:(`label`)....``という記述がある場合，``\ref(`label`);`とすることで該当見出しの番号を文書内に挿入することができます．
+* `\ref-page: `\ref`と同様ですがこちらはページ数．
+* `\footnote`: `\footnote{脚注本文}`で使って脚注を出力します．
+* `\figure`: ``\figure ?:(`label`) {キャプション} {図}``により使い，図の配置を行います．
 
-#### `nfss`
-フォントを表します．現状では，
-```
-  | Current
-  | CurrentType of zw-or-length
-  | Roman of zw-or-length
-  | Sans of zw-or-length
-  | Italic of zw-or-length
-  | Font of zw-or-length * (|
-    cjk : string * float * float;
-    latin : string * float * float;
-  |)
-```
-です．`Current`はフォントの変更を行いません．`CurrenType(n)`はフォントサイズを`n`に変更します．`Roman(n)`，`Sans(n)`，`Italic(n)`はそれぞれ立体，イタリック，サンセリフ/ゴシックです．`n`はフォントのサイズを表します．`Font`ではフォント自身を直接指定します．
 
-#### `page-info`
-現在は`(|page-number : int|)`です．プリミティヴ`page-break`の第二引数に与えられる引数の型です．
+`show-toc = true`と変更すると目次が出ます．デフォルトでは目次はタイトルの後，本文の前に出ますが，次のようにして前付きをつけることもできます．
+```
+  document(|
+   ....
+  |) ?* ?* ?:'<
+    +p{前付きです．}
+  > '<
+    % ここから本文．
+    +section{はじめに}<
+      +p{最初の段落}
+    >
+  >
+```
 
-## 文書作成用の関数たち．
+そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やboo値（`true`または`false`）で指定することも多いですが，jlreq特有の設定方法として以下の二つがあります．
 
-### `document : 'a -> config ?-> 'b ?-> block-boxes -> document`
-メインとなる関数です．`'a`は
-```
-(|
-  title : inline-text;
-  author : inline-text;
-  date : inline-text;
-  show-title : bool;
-|)
-```
-で，文書の属性を指定します．`'b`は現状では
-```
-(|
-  maketitle : ctx -> inline-text -> inline-text -> inline->text -> block-boxes
-|)
-```
-です．`maketitle`ではタイトル出力時の形式を指定します．`maketitle ctx title author date`で呼び出されるので，整形結果を返してください．
+* `jlreq長さ`: 以下で`jlreq長さ`として出てきた項目に対しては，次のどちらかで設定をします．
+    - `Length(<長さ>)`: `<長さ>`そのもの．`<長さ>`はlength型．
+    - `ZW(<実数値>)`: フォントサイズの`<実数値>`倍．
+* `フォント`: フォントの設定です．文字サイズや太字にするかを指定します．
+    - `Curren` :現在のフォント．
+    - `CurrenType(n)`: 現在のフォントですが，フォントサイズを`n`にします．`n`はjlreq長さで指定します．
+    - `Roman(n)`，`Sans(n)`，`Italic(n)`: 立体，イタリック，サンセリフ/ゴシックです．`n`はフォントのサイズで，やはりjlreq長さで指定します．
+    - `Font`: フォントの直接指定．
 
-`config`は文書の基本版面に関する指定を行う型で，
-```
-(|
-  twoside : bool;
-  paper-size : page;
-  horizontal-layout : kihon-hanmen-horizontal;
-  vertical-layout : kihon-hanmen-vertical;
-  header-sep : zw-or-length;
-  header-height : zw-or-length;
-  line-gap : length;
-  font-size : length;
-  cjk-font : config-cjkfont;
-  latin-font : config-latinfont;
-|)
-```
-です．各中身を以下順番に説明します．
 
-#### `twoside`
-`false`が指定されると偶奇ページを同じレイアウトにします．
-
-#### `paper-size`
-紙面サイズです．
-
-#### `horizontal-layout`
-横方向の基本版面の指定です．`kihon-hanmen-horizontal`は
+### 基本版面の設定
+紙サイズや行長のような基本版面の設定は，`document`関数の第二引数を使い
 ```
-type kihon-hanmen-horizontal = 
-  | HorizontalAuto
-  | HorizontalCenter of zw-or-length
-  | Gutter of (|
-      line-length : zw-or-length;
-      gutter : zw-or-length;
-   |)
-  | GutterFore-edge of (|
-      gutter : zw-or-length;
-      fore-edge : zw-or-length;
+  document(|
+   ....
+  |) ?:(|JLReq.default-config-document with % jlreqのデフォルト設定をもとにする
+    paper = A5Paper;% 紙サイズをA5にする．
+    font-size = 11pt;% フォントサイズを11ptにする．
+  |) `<
+    ...
+    >
+  >
+```
+のようにします．
+以下の項目が設定可能です．
+
+* `paper`: 紙サイズです．`A0Paper`，`A1Paper`，`A2Paper`，`A3Paper`，`A4Paper`，`A5Paper`，`USLegal`，`USLetter`の他，`UserDefinedPaper(<横幅>,<縦の長さ>)`のように具体的な値を指定することもできます．デフォルト`A4Paper`．
+* `font-size`: フォントのサイズを長さで指定します．
+* `line-gap`: 行間を長さで指定します．
+* `two-side`: `true`または`false`です．`true`とすると奇数ページと偶数ページで異なるデザインとなります．デフォルト`false`．
+* `column`: 整数値を指定します．`column = n;`とするとn段組になります．現在のところはnは1または2のみがサポートされています．
+* `column-gap`: 段間をjlreq長さで指定します．
+* `horizontal-layout`: 横方向のレイアウトです．以下のどれかで設定します．
+    - `HorizontalAuto`: 紙面の0.75倍がテキスト幅となるように中央配置．
+    - `HorizontalCenter(<テキスト幅; jlreq長さ>)`: テキスト幅にあわせて中央配置．
+    - `Gutter(|line-length = <テキスト幅; jlreq長さ>; gutter = <のどの空き; jlreq長さ>;|)`: テキスト幅とのどの空きから決定します．
+    - `GutterFore-edge(|gutter = <のどの空き; jlreq長さ>; fore-edge = <小口の空き; jlreq長さ>;|)`: のどと小口の空きから指定します．
+* `vertical-layout`: 縦方向のレイアウトです．以下のどれかで設定します．
+    - `VerticalAuto`: 紙面の0.75倍がテキスト高さとなるように中央配置．
+    - `VertialCenter(<テキスト高さ; jlreq長さ>)`: テキスト高さが`l`となるように中央配置．
+    - `Top(|block-length = <テキスト高さ; jlreq長さ>; top-space = <天の空き; jlreq長さ>;|)`: テキスト高さと天の空きから決定します．
+    - `TopBottom(|top-space = <天の空き; jlreq長さ>; bottom-space = <地の空き; jlreq長さ>;|)`: 天と地の空きから決定します．
+* `header-sep`: ヘッダやフッタと本文との空きです．jlreq長さで指定します．
+* `header-height`: ヘッダやフッタの高さをjlreq長さで指定します．
+* `cjk-font`: 和文フォントを指定します．次のどちらかです．
+    - `CJKFont-preset-ipaex(<実数値>)`: ipaexを`<実数値>`倍して使います．
+    - `CJKFont(|mincho = (<明朝フォント名>,<拡大率>,<ベースライン調整率>); gothic = (<ゴシックフォント名>,<拡大率>,<ベースライン調整率>;|)`: 直接指定します．
+*  `latin-font`: 欧文フォントを指定します．次のどちらかです．
+    - `LatinFont-preset-lmodern(<実数値>)`: lmodernを`<実数値>`倍して使います．
+    - `LatinFont(|roman = (<ローマンフォント名>,<拡大率>,<ベースライン調整率>); italic = (<イタリックフォント名>,<拡大率>,<ベースライン調整率>); sans = (<サンセリフフォント名>,<拡大率>,<ベースライン調整率>);|)` 直接指定します．
+
+## ヘッダとフッタ
+ヘッダとフッタに出力されるページ数や柱の指定を行います．ヘッダとフッタをあわせて，ページスタイルと呼びます．まずページスタイルををあらかじめ`JLreqPageStyle.page-style-scheme`を使い次のように作成しておきます．
+```
+    let page-style-headings = JLReqPageStyle.page-style-scheme (|
+      nombre = [% ノンブルの指定
+        (|
+          position = PageStyleBottomCenter; % 場所はフッタの真ん中
+          nombre = (fun pb -> embed-string (arabic pb#page-number)); % ノンブルの出力．ページ数をそのまま出力する．
+          font = Roman(ZW(0.8)); % フォント指定
+        |);
+      ];
+      running-head = [% 柱の指定
+        (|
+          position = PageStyleTopCenter; % 柱の場所はヘッダの中心
+          odd = PageStyleFirstMark(JLReq.default-config-subsection#level); % 奇数ページには+subsectionの見出しを出力
+          even = PageStyleBotMark(JLReq.default-config-section#level); % 偶数ページには+sectionの見出しを出力
+          font = Roman(ZW(0.8));
+        |)
+      ];
     |)
-
 ```
-と定義されています．`HorizontalAuto`を指定すると紙面の0.75倍がテキスト幅となるように中央配置されます．`HorizontalCenter(l)`はテキスト幅が`l`となるように中央配置されます．`Gutter(|line-length = l1; gutter = l2;|)`とすると，テキスト幅が`l1`，のどの空きが`l2`となります．`GutterFore-edge(|gutter = l1; fore-edge = l2;|)`とすると，のどの空きが`l1`，小口の空きが`l2`となります．この指定はJLReqでは基本的に行わないと記述されています．
-
-#### `vertical-layout`
-縦方向の基本版面の設定です．`kihon-hanmen-vertical`は
+ページスタイルの適用は，プリアンブルにて
 ```
-type kihon-hanmen-vertical =
-   | VerticalAuto
-   | VerticalCenter of zw-or-length
-   | Top of (|
-       block-length : zw-or-length;
-       top-space : zw-or-length;
-     |)
-   | TopBottom of (|
-       top-space : zw-or-length;
-       bottom-space : zw-or-length;
-     |)
+  register-page-style page-style-headins
 ```
-と定義されています．`VerticalAuto`を指定すると紙面の0.75倍がテキスト高さとなるように中央配置されます．`VertialCenter(l)`はテキスト高さが`l`となるように中央配置されます．`Top(|block-length = l1; top-space = l2;|)`とすると，テキスト高さが`l1`，天の空きが`l2`となります．`TopBottom(|top-space = l1; bottom-space = l2;|)`とすると，天の空きが`l1`，地の空きが`l2`となります．この指定はJLReqでは基本的に行わないと記述されています．
-
-#### `header-sep`
-ヘッダと本文との空きを指定します．
-
-#### `header-height`
-ヘッダの高さを指定します．
-
-#### `line-gap`
-行間を指定します．
-
-#### `font-size`
-基本となるフォントサイズを指定します．
-
-#### `cjk-font`
-和文フォントを指定します．`config-cjkfont`は
+とします．また，文書中で変更したい場合は，次のように定義した`\set-page-style`を使いこのページスタイルを適用します．
 ```
-type config-cjkfont =
-  | CJKFont-preset-ipaex of float
-  | CJKFont of (|
-    mincho : string * float * float;
-    gothic : string * float * float;
-  |)
-```
-と定義されています．`CJKFont-preset-ipaex(n)`とすると，`font-size`で指定した値の`n`倍のサイズのipaexを使います．`CJKFont`は直接指定です．
-
-#### `latin-font`
-欧文フォントを指定します．`config-latinfont`は
-
-```
-type config-latinfont = 
-  | LatinFont-preset-lmodern of float
-  | LatinFont of (|
-    roman : string * float * float;
-    italic : string * float * float;
-    sans : string * float * float;
-  |)
+   let-inline ctx \set-page-style ps = JLReqPageStyle.register-page-style-inline ps
+   
+   ....
+   <本文内>
+   +p{...
+      \set-page-style(page-style-headings);% このページ以降上で定義したヘッダとフッタが出力される
+      ...
+   }
 ```
 
-と定義されています．`LatinFont-preset-lmodern(n)`とすると，`font-size`で指定した値の`n`倍のサイズのLatin Modernを使います．`LatinFont`は直接指定です．
-
-### `+p : [inline-text] block-cmd`
-段落です．
-
-### `+pn : [inline-text] block-cmd`
-インデントのない段落です．
-
-### `+part : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd`
-部を表します．`+part ?:label ?:runninghead ?:subtitle heading main-text`で使います．`label`は相互参照のためのラベルです．`runninghead`は柱などに出力する見出しを指定します．省略された場合は指定された見出しそのものが使われます．`subtitle`は副題です．`heading`が見出し文字列，`main-text`がその節の中身です．
-
-### `+section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd`
-節を表します．`+part`と使い方は同じ．
-
-### `+subsection : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd`
-`+section`の一つ下のレベルの見出しです．`+part`と使い方は同じ．
-
-### `+paragraph : [string?; inline-text?; inline-text; inline-text;] block-cmd`
-`+subsection`の一つ下のレベルの見出しです．`+paragraph ?:label ?:runninghead ?:heading ?:main-text`で使います．`label`は相互参照のためのラベルです．`runninghead`は柱などに出力する見出しを指定します．省略された場合は指定された見出しそのものが使われます．`heading`が見出し文字列，`main-text`がその節の中身です．
-
-### `\ref : [string] inline-cmd`
-`label`で登録した情報を参照します．
-
-### `\ref-page : [string] inline-cmd`
-`\ref`と同様ですがこちらはページ数．
-
-### `\footnote : [inline-text] inline-cmd`
-脚注です．
-
-### `\figure : [string?; inline-text; block-text] inline-cmd`
-図の配置を行います．`\figure ?:label caption innner`で使います．`label`は相互参照のためのラベルです．`caption`ではキャプションを指定します．`innner`で図を出力します．
-
-## マーク
-TeXでいうmarkの機構を実現するために以下の関数があります．
-
-### `JLReqMark.set-mark : int -> inline-text -> inline-boxes`
-`JLReqMark.set-mark index text`の戻り値が埋め込まれた場所で`index`番目のマークを`text`に設定します．`hook-page-break`での設定です．
-
-### `JLReqMark.get-first-mark : int -> int -> inline-text option`
-`JLReqMark.set-mark index pageno`で，`pageno`ページで設定された`index`番目の最初のマークを取得します．`index`番目のマークが一切設定されていなければ`None`が返ります．
-
-### `JLReqMark.get-last-mark : int -> int -> inline-text option`
-`JLReqMark.set-mark index pageno`で，`pageno`ページで設定された`index`番目の最後のマークを取得します．`index`番目のマークが一切設定されていなければ`None`が返ります．
-
-## ページスタイル
-以下でヘッダとフッタの変更ができます．LaTeXの`\pagestyle`をまねています．
-
-* `JLReqPageStyle.register-pagestyle-inline : pagestyle -> inline-boxes`：戻り値が埋め込まれた場所でヘッダとフッタの変更を行います．
-* `JLReqPageStyle.register-pagestyle : pagestyle -> unit`：その場でヘッダとフッタの変更を行います．おもにプリアンブルで使います．
-
-型`pagestyle`は
-
-```
-type pagestyle = (|
-  odd-header : (context -> page-info -> block-boxes);
-  even-header : (context -> page-info -> block-boxes);
-  odd-footer : (context -> page-info -> block-boxes);
-  even-footer : (context -> page-info -> block-boxes);
-|)
-```
-と定義されています．
-
-各々の関数を手で設定してもよいですが，
-
-```
-val JLReqPageStyle.pagestyle-scheme : 
-  nombre : ((|
-    position : pagestyle-position;
-    nombre : (page-info -> inline-text);
-    font : nfss;
-  |)) list;
-  running-head : ((|
-    position : pagestyle-position;
-    font : nfss;
-    odd : pagestyle-runninghead;
-    even : pagestyle-runninghead;
-  |)) list;
-|) -> pagestyle
-```
-を使ってページスタイルを生成することもできます．
-
-`nombre`および`running-head`はそれぞれノンブルおよび柱の出力に関する設定です．いずれもリストで与えることで任意個数の指定ができます．（通常はどちらも一つでしょう．）
-
-* `font`：フォントを指定します．
-* `position`：`pagestyle-position`は
-
-    ````
-    type pagestyle-position = 
-      PageStyleBottomCenter |
-      PageStyleBottomLeft |
-      PageStyleBottomRight |
-      PageStyleTopCenter |
-      PageStyleTopLeft |
-      PageStyleTopRight
-    ````
-    
-    と定義されています．ノンブルや柱の出力位置を指定します．
-
-* `nombre#nombre`：ページ数の出力形式を，`page-info`を受け取る関数として設定します．
-* `running-head#odd`，`running-head#even`：奇数ページおよび偶数ページの柱の内容を指定します．`pagestyle-runninghead`は
-    
-    ```
-    type pagestyle-runninghead = 
-      PageStyleFirstMark of int |
-      PageStyleBotMark of int |
-      PageStyleTopMark of int |
-      PageStyleFormat of (page-info -> inline-text)
-    ```
-    
-    と定義されています．`PageStyleFormat(f)`を指定した場合は`f`の戻り値が柱になります．`PageStyleFirstMark(n)`，`PageStyleBotMark(n)`，`PageStyleTopMark(n)`は`n`番目の，それぞれ現在ページの最初，現在ページの最後，前のページの最後でのマークを出力します．後の`blockheading-scheme`などとあわせることで見出し文字列を柱として出力できるようになります．
-
-## スタイル調整用関数
-例えば以下の`JLReqHeading.blockheading-scheme`を使い，
-```
-let-mutable section-counter <- 0
-let-block ctx +section = JLReqHeading.blockheading-scheme (|
-<設定>
-|) ctx section-counter
-```
-とすれば，新しいスタイルの`+section`を使うことができます．（内部では`+section`はこのように作られています．）
-
-#### `JLReqHeading.blockheading-scheme 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes`
-別行見出しを作成します．`JLReqHeading.blockheading-scheme config counter ctx`とすると，`+section`と同様の書式の関数となります．`counter`はこの見出しの番号のカウンタです．`config`の型は
-```
-(|
-  font : nfss;
-  label-font : nfss;
-  subtitle-font : nfss;
-  gyodori : blockheading-gyodori;
-  label-format : int -> inline-text;
-  reference-label-format : int -> string;
-  subtitle-format : inline-text -> inline-text;
-  indent : zw-or-length;
-  end-indent : zw-or-length;
-  after-label-space : zw-or-length;
-  second-heading-text-indent : bool * zw-or-length;
-  subtitle-indent : blockheading-subtitle-indent;
-  reset-counters : (int ref) list;
-  mark-index : int;
-  clear-mark-indices : int list;
-  mark-format : inline-text -> inline-text -> inline-text;
-|)
-```
-で，細かいスタイルなどをここで調整します．
-
-* `font`：全体のフォントを指定します．
-* `label-font`：ラベルのフォントを指定します．
-* `subtitle-font`：副題のフォントを指定します．
-* `gyodori`：前後の空きを指定します．．型`blockheading-gyodori`は
-
-    ```
-    type blockheading-gyodori = 
-      | GyodoriCenter of float
-      | BeforeLines of float * float
-      | BeforeLength of float * length
-      | AfterLines of float * float
-      | AfterLength of float * length
-      | Absolute of length * length
-    ```
-
-    と定義されています．
-    - `GyodoriCenter(n)`：`n`行取りし，その中央に配置します．
-    - `BeforeLines(n,l)`：`n`行取りし，さらにその前に`l`行空きを入れます．
-    - `BeforeLength(n,l)`：`n`行取りしますが，前方の空きを`l`に固定します．
-    - `AfterLines(n,l)`：`n`行取りし，さらにその後に`l`行空きを入れます．
-    - `AfterLength(n,l)`：`n`行取りしますが，後方の空きを`l`に固定します．
-    - `Absolute(l1,l2)`：前方の空きを`l1`，後方の空きを`l2`に固定します．
-
-* `label-format`：ラベルの形式を指定します．カウンタの値を受け取り`inline-text`を返します．
-* `reference-label-format`：`\ref`などによる引用の際のラベルの形式を指定します．
-* `subtitle-format`：副題の形式を指定します．
-* `indent`：見出しの字下げ量を指定します．
-* `end-indent`：見出しの地上げ量を指定します．
-* `after-label-space`：ラベル直後の空きを指定します．
-* `second-heading-text-indent`：見出し文字列が二行に渡った際に，二行以降の字下げ量を指定します．`second-heading-text-indent = (b,l)`とすると字下げ量を`l`にします．`b`が`true`ならばラベル頭を起点とした字下げ量になります．`false`ならば見出し文字列の頭を起点とします．
-* `subtitle-indent`：副題のインデントです．型`blockheading-subtitle-indent`は
-
-    ````
-    type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * zw-or-length
-    ````
-    
-    と定義されています．`SubTitleNoBreak`を指定すると見出し文字列の直後，副題の直前では改行をしません．この場合インデント量は`second-heading-text-indent`のものが使われます．`SubTitleIndent(b,l)`とすると，副題直前で改行され，副題の字下げ量が`l`となります．`b`の意味は`second-heading-text-indent`と同様です．
-    
-* `reset-counters`：この関数が呼ばされた際にリセットするカウンタの一覧をリストで渡します．例えば`+section`ではより下位の`+subsection`のカウンタをリセットするために，ここに`+subsection`のカウンタである`subsection-counter`が渡されています．
-
-* `mark-index`：個々に指定された番号のマークに乱し文字列を設定します．
-* `clear-mark-indices`：マークを空文字に設定する番号のリストを指定します．
-* `mark-format`：マークに設定する形式を指定します．`mark-format label heading`の形で呼ばれ，戻り値がマークに設定されます．`label`はラベル，`heading`は見出し文字列です．
-
-#### `runinheading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes`
-同行見出しです．副題が指定できない他は別行見出しと同様です．`'a`は
-```
-(|
-  font : nfss;
-  indent : zw-or-length;
-  after-label-space : zw-or-length;
-  after-space : zw-or-length;
-  label-format : int -> inline-text;
-  reference-label-format : int -> string;
-  mark-index : int;
-  mark-format : inline-text -> inline-text -> inline-text;
-  clear-mark-indices : int list;
-  reset-counters : (int ref) list;
-|)
-```
-で，`after-space`以外は`blockheading-scheme`と同じ意味を持ちます．`after-space`は見出し文字列と本文との間の空きを指定します．
-
-
-#### `JLReqFootnote.footnote-scheme : 'a -> int ref -> context -> inline-text -> inline-boxes`
-脚注を作ります．`JLReqFootnote.footnote-scheme config counter ctx text`で，`text`を脚注に追加します．`counter`は脚注番号を表すカウンターです．`config`は
-```
-(|
-  reference-mark-type : reference-mark-type;
-  reference-mark-format : int -> inline-text;
-  reference-mark-font : nfss;
-  font : nfss;
-  line-gap : zw-or-length;
-  indent : zw-or-length;
-  second-indent : zw-or-length;
-|)
-```
-
-* `reference-mark-type`：合印の配置方法です．`reference-mark-type`は`Interlinear | Inline`と定義されています．`Interlinear`を指定すると該当項目の真上に配置します．`Inline`を指定すると該当項目後ろの行中に配置します．
-* `reference-mark-format`：合印のフォーマットです．カウンタを受け取り実際の出力を返します．
-* `reference-mark-font`：合印のフォントを指定します．
-* `font`：脚注のフォントです．
-* `line-gap`：脚注の行間です．
-* `indent`：脚注のインデントを指定します．
-* `second-indent`：脚注の二行目以降のインデントを指定します．一行目からの相対位置です．
-
+上のように，`JlreqPageStyle.page-style-scheme`ではノンブルと柱を独立に設定します．複数のノンブル，柱を設定することができ，各々リストで渡します．各設定では以下を使います．
+* `position`: ノンブル，柱共通です．`PageStyleBottomCenter`，`PageStyleBottomLeft`，`PageStyleBottomRight`，`PageStyleTopCenter`，`PageStyleTopLeft`，`PageStyleTopRight`の六カ所から選びます．
+* `font`: ノンブル，柱共通です．フォントを指定します．
+* `nombre`: ノンブル用です．ノンブルの出力を指定します．`(|page-number : int;|)`という型を受け取り，出力する`inline-boxes`を返す関数を設定します．
+* `odd`: 柱用です．奇数ページの柱を指定します．`+section`のような見出しの中身の出力を設定できます．見出しにはレベルが設定されていて，このレベルを使い設定を行います．`+section`のデフォルトの設定は`JLReq.default-config-section`に入っていて，そのレベルは`JLReq.default-config-section#level`で参照できます．`+part`，`+subsection`．`+paragraph`もすべて同様です．ここの設定は，`PageStyleFirstMark(<見出しレベル>)`，`PageStyleBotMark(<見出しレベル>)`，`PageStyleTopMark(<見出しレベル>)`のいずれかを指定します．それぞれ，該当ページの最初の見出し，最後の見出しおよび前ページの最後の見出しに対応します．または，`PageStyleFormat(f)`とすると，`f`の戻り値が出力されます．ただし，`f`は`(|page-number; int;|)`を受け取り`inline-text`を返す関数です．
+* `even`: 偶数ページの柱です．ただし，`document`関数で`two-side = false;`が指定されている場合は，この項目は無視され，ページによらず`odd`で指定した柱が出力されます．
 
 
