@@ -1,16 +1,16 @@
 @import: base
 
-type zw-or-length = 
+type jlreq-length = 
   | Length of length
   | ZW of float
 
 type nfss = 
   | Current
-  | CurrentType of zw-or-length
-  | Roman of zw-or-length
-  | Sans of zw-or-length
-  | Italic of zw-or-length
-  | Font of zw-or-length * (|
+  | CurrentType of jlreq-length
+  | Roman of jlreq-length
+  | Sans of jlreq-length
+  | Italic of jlreq-length
+  | Font of jlreq-length * (|
     cjk : string * float * float;
     latin : string * float * float;
   |)
@@ -30,6 +30,7 @@ module JLReqFont : sig
   val select-font : nfss -> context -> context
   val font-size : length
   val line-gap : length
+  val to-length : length ?-> jlreq-length -> length
 end = struct
   % font-size, line-gap, fontたち
   let-mutable ref-font <- (10pt,7pt,(|
@@ -46,6 +47,15 @@ end = struct
   let line-gap = 
     let (_,lg,_) = !ref-font in
     lg
+  
+  let to-length ?:f-size length =
+    let fs = match f-size with
+    | None -> font-size
+    | Some(l) -> l
+    in
+    match length with
+    | Length(l) -> l
+    | ZW(l) -> fs *' l
   
   let select-font f ctx  =
     let (font-size,line-gap,font) = !ref-font in

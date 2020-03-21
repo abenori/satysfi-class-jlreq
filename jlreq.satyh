@@ -12,26 +12,26 @@
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto
-  | HorizontalCenter of zw-or-length
+  | HorizontalCenter of jlreq-length
   | Gutter of (|
-      line-length : zw-or-length;
-      gutter : zw-or-length;
+      line-length : jlreq-length;
+      gutter : jlreq-length;
    |)
   | GutterFore-edge of (|
-      gutter : zw-or-length;
-      fore-edge : zw-or-length;
+      gutter : jlreq-length;
+      fore-edge : jlreq-length;
     |)
 
 type kihon-hanmen-vertical =
    | VerticalAuto
-   | VerticalCenter of zw-or-length
+   | VerticalCenter of jlreq-length
    | Top of (|
-       block-length : zw-or-length;
-       top-space : zw-or-length;
+       block-length : jlreq-length;
+       top-space : jlreq-length;
      |)
    | TopBottom of (|
-       top-space : zw-or-length;
-       bottom-space : zw-or-length;
+       top-space : jlreq-length;
+       bottom-space : jlreq-length;
      |)
 
 type config-cjkfont =
@@ -50,22 +50,27 @@ type config-latinfont =
   |)
 
 type config-document = (|
-  twoside : bool;
+  two-side : bool;
   paper-size : page;
   horizontal-layout : kihon-hanmen-horizontal;
   vertical-layout : kihon-hanmen-vertical;
-  header-sep : zw-or-length;
-  header-height : zw-or-length;
+  header-sep : jlreq-length;
+  header-height : jlreq-length;
   line-gap : length;
   font-size : length;
   cjk-font : config-cjkfont;
   latin-font : config-latinfont;
   column : int;
-  column-gap : zw-or-length;
+  column-gap : jlreq-length;
 |)
 
 module JLReq : sig
   val default-config-document : config-document
+  val default-config-part : jlreq-block-heading-config
+  val default-config-section : jlreq-block-heading-config
+  val default-config-subsection : jlreq-block-heading-config
+  val default-config-paragraph : jlreq-run-in-heading-config
+  
 
   val document : (|
       title : inline-text;
@@ -76,11 +81,11 @@ module JLReq : sig
     |) -> config-document ?-> (|
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     |) ?-> block-text ?-> block-text -> document
-  val \hspace : [zw-or-length] inline-cmd
+  val \hspace : [jlreq-length] inline-cmd
   val float-scheme : (|
     caption-font : nfss;
     caption-label-font : nfss;
-    caption-after-label-space : zw-or-length;
+    caption-after-label-space : jlreq-length;
     caption-label-format : int -> inline-text;
   |) -> int ref -> context -> string ?-> inline-text -> block-text -> inline-boxes
   
@@ -97,7 +102,7 @@ module JLReq : sig
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
   let default-config-document = (|
-    twoside = false;
+    two-side = false;
     paper-size = A4Paper;
     horizontal-layout = HorizontalAuto;
     vertical-layout = VerticalAuto;
@@ -160,14 +165,9 @@ end = struct
     in
     let caption-ctx = JLReqFont.select-font config#caption-font ctx in
     let label-ctx = JLReqFont.select-font config#caption-label-font caption-ctx in
-    let to-length len =
-      match len with
-      | ZW(n) -> (get-font-size ctx) *' n
-      | Length(l) -> l
-    in
     let b-caption =
       (read-inline label-ctx (config#caption-label-format !counter)) ++ 
-      (inline-skip (to-length config#caption-after-label-space)) ++
+      (inline-skip (JLReqFont.to-length config#caption-after-label-space)) ++
       (read-inline caption-ctx caption)
     in
     let bb-inner =
@@ -390,12 +390,7 @@ end = struct
 
 
     let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
-    let zw-or-length-to-length v = 
-      match v with
-      | Length(l) -> l
-      | ZW(n) -> config#font-size *' n
-    in
-    let column-gap = zw-or-length-to-length config#column-gap in
+    let column-gap = JLReqFont.to-length config#column-gap in
     let (odd-left-margin,odd-right-margin) = 
       match config#horizontal-layout with 
       | HorizontalAuto -> 
@@ -403,16 +398,16 @@ end = struct
         let twmod = config#font-size *' (float (round (tw /' config#font-size))) in
         ((paper-width -' twmod) *' 0.5,(paper-width -' twmod) *' 0.5)
       | HorizontalCenter(n) -> 
-        let len = zw-or-length-to-length n in
+        let len = JLReqFont.to-length n in
         let m = (paper-width -' len) *' 0.5 in
         (m,m)
       | Gutter(gd) -> 
-        let len = ((zw-or-length-to-length gd#line-length) *' (float config#column)) +'  (column-gap *' (float (config#column - 1))) in
-        let gutter = zw-or-length-to-length gd#gutter in
+        let len = ((JLReqFont.to-length gd#line-length) *' (float config#column)) +'  (column-gap *' (float (config#column - 1))) in
+        let gutter = JLReqFont.to-length gd#gutter in
         (gutter,paper-width -' len -' gutter)
       | GutterFore-edge(gfe) ->
-        let gutter = zw-or-length-to-length gfe#gutter in
-        let fore-edge = zw-or-length-to-length gfe#fore-edge in
+        let gutter = JLReqFont.to-length gfe#gutter in
+        let fore-edge = JLReqFont.to-length gfe#fore-edge in
         (gutter,fore-edge)
     in
     % 1.0ptはおまじない……
@@ -421,20 +416,20 @@ end = struct
       match config#vertical-layout with
       | VerticalAuto -> (paper-height *' 0.125,paper-height *' 0.125)
       | VerticalCenter(n) ->
-        let len = zw-or-length-to-length n in
+        let len = JLReqFont.to-length n in
         let s= (paper-height -' len) *' 0.5 in
         (s,s)
       | Top(td) ->
-        let top-space = zw-or-length-to-length td#top-space in
-        let len = zw-or-length-to-length td#block-length in
+        let top-space = JLReqFont.to-length td#top-space in
+        let len = JLReqFont.to-length td#block-length in
         (top-space,paper-height -' len -' top-space)
       | TopBottom(tbd)->
-        let top-space = zw-or-length-to-length tbd#top-space in
-        let bottom-space = zw-or-length-to-length tbd#bottom-space in
+        let top-space = JLReqFont.to-length tbd#top-space in
+        let bottom-space = JLReqFont.to-length tbd#bottom-space in
         (top-space,bottom-space)
     in
     let get-left-margin pagenum =
-      if config#twoside && (pagenum mod 2 == 0) then
+      if config#two-side && (pagenum mod 2 == 0) then
         odd-right-margin
       else
         odd-left-margin
@@ -449,7 +444,7 @@ end = struct
         (!ref-float-boxes) |> List.fold-left (fun (h,n) (pn, bb) -> (
           if pn > pbinfo#page-number then (h,n)
           else
-            let hh = h +' (get-natural-length bb) +' (zw-or-length-to-length float-margin) in
+            let hh = h +' (get-natural-length bb) +' (JLReqFont.to-length float-margin) in
             if hh <' max-float-height || n == 0 then (hh,n + 1)
             else (h,n)
         )) (0pt,0)
@@ -463,14 +458,14 @@ end = struct
         text-height = paper-height -' top-space -' bottom-space -' hofb;
       |)
     in
-    let head-height = zw-or-length-to-length config#header-height in
-    let head-sep = zw-or-length-to-length config#header-sep in
+    let head-height = JLReqFont.to-length config#header-height in
+    let head-sep = JLReqFont.to-length config#header-sep in
     let () = ref-kihonhanmen <- (|
     |) in
     let pagestyle pbinfo = 
       let ctx = get-standard-context text-width in
       let (h,f) = 
-        if config#twoside && (pbinfo#page-number mod 2 == 0) then 
+        if config#two-side && (pbinfo#page-number mod 2 == 0) then 
           (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
         else
           (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
@@ -486,7 +481,7 @@ end = struct
         List.fold-right (fun (page,box) (o,r,n) -> (
           if (n >= number-of-float-boxes || page > pbinfo#page-number) then (o,(page,box) :: r,n)
           else
-            let b = line-break true true (set-paragraph-margin 0pt (zw-or-length-to-length float-margin) ctx)
+            let b = line-break true true (set-paragraph-margin 0pt (JLReqFont.to-length float-margin) ctx)
               (inline-fil ++ (embed-block-top ctx text-width (fun _ -> box) ++ inline-fil))
             in
             (o +++ b,r,n + 1)

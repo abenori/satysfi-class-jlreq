@@ -10,9 +10,9 @@ module JLReqFootnote : sig
       reference-mark-format : int -> inline-text;
       reference-mark-font : nfss;
       font : nfss;
-      line-gap : zw-or-length;
-      indent : zw-or-length;
-      second-indent : zw-or-length;
+      line-gap : jlreq-length;
+      indent : jlreq-length;
+      second-indent : jlreq-length;
     |)
 end = struct
   %. 脚注

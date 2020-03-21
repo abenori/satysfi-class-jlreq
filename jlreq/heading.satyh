@@ -5,7 +5,7 @@
 @import: mark
 @import: toc
 
-type blockheading-gyodori = 
+type block-heading-gyodori = 
   | GyodoriCenter of float
   | BeforeLines of float * float
   | BeforeLength of float * length
@@ -13,61 +13,64 @@ type blockheading-gyodori =
   | AfterLength of float * length
   | Absolute of length * length
 
-type blockheading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * zw-or-length
+type block-heading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * jlreq-length
+
+type jlreq-block-heading-config = (|
+  level : int;
+  font : nfss;
+  label-font : nfss;
+  subtitle-font : nfss;
+  gyodori : block-heading-gyodori;
+  label-format : int -> inline-text;
+  reference-label-format : int -> string;
+  subtitle-format : inline-text -> inline-text;
+  indent : jlreq-length;
+  end-indent : jlreq-length;
+  after-label-space : jlreq-length;
+  % ラベル頭起点にするならば一つ目をtrueにする．
+  second-heading-text-indent : bool * jlreq-length;
+  subtitle-indent : block-heading-subtitle-indent;
+  reset-counters : (int ref) list;
+  clear-mark-indices : int list;
+  mark-format : inline-text -> inline-text -> inline-text;
+  add-to-toc : bool;
+|)
+
+type jlreq-run-in-heading-config = (|
+  level : int;
+  font : nfss;
+  indent : jlreq-length;
+  after-label-space : jlreq-length;
+  after-space : jlreq-length;
+  label-format : int -> inline-text;
+  reference-label-format : int -> string;
+  mark-format : inline-text -> inline-text -> inline-text;
+  clear-mark-indices : int list;
+  reset-counters : (int ref) list;
+  add-to-toc : bool;
+|)
 
 module JLReqHeading : sig
-  val block-heading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
-    constraint 'a :: (|
-      level : int;
-      font : nfss;
-      label-font : nfss;
-      subtitle-font : nfss;
-      gyodori : blockheading-gyodori;
-      label-format : int -> inline-text;
-      reference-label-format : int -> string;
-      subtitle-format : inline-text -> inline-text;
-      indent : zw-or-length;
-      end-indent : zw-or-length;
-      after-label-space : zw-or-length;
-      % ラベル頭起点にするならば一つ目をtrueにする．
-      second-heading-text-indent : bool * zw-or-length;
-      subtitle-indent : blockheading-subtitle-indent;
-      reset-counters : (int ref) list;
-      clear-mark-indices : int list;
-      mark-format : inline-text -> inline-text -> inline-text;
-      add-to-toc : bool;
-    |)
+  val block-heading-scheme : jlreq-block-heading-config -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
 
   val block-heading-scheme-nocounter : 'a -> context -> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
       level : int;
       font : nfss;
       subtitle-font : nfss;
-      gyodori : blockheading-gyodori;
+      gyodori : block-heading-gyodori;
       subtitle-format : inline-text -> inline-text;
-      indent : zw-or-length;
-      end-indent : zw-or-length;
-      second-heading-text-indent : zw-or-length;
-      subtitle-indent : blockheading-subtitle-indent;
+      indent : jlreq-length;
+      end-indent : jlreq-length;
+      second-heading-text-indent : jlreq-length;
+      subtitle-indent : block-heading-subtitle-indent;
       clear-mark-indices : int list;
       mark-format : inline-text -> inline-text;
       add-to-toc : bool;
     |)
 
-  val run-in-heading-scheme : 'a -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes
-    constraint 'a :: (|
-      level : int;
-      font : nfss;
-      indent : zw-or-length;
-      after-label-space : zw-or-length;
-      after-space : zw-or-length;
-      label-format : int -> inline-text;
-      reference-label-format : int -> string;
-      mark-format : inline-text -> inline-text -> inline-text;
-      clear-mark-indices : int list;
-      reset-counters : (int ref) list;
-      add-to-toc : bool;
-    |)
+  val run-in-heading-scheme : jlreq-run-in-heading-config -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes
+
 end = struct
   let-inline ctx \hspace len =
     let l = match len with

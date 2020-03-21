@@ -9,7 +9,7 @@ module JLReqTheorem : sig
       font : nfss;
       heading-font : nfss;
       reference-label-format : int -> string;
-      after-label-space : zw-or-length;
+      after-label-space : jlreq-length;
     |)
     
 end = struct
