@@ -80,7 +80,12 @@ module JLReq : sig
       show-title : bool;
     |) -> config-document ?-> (|
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
+      table-of-contents : context -> block-boxes -> block-boxes;
     |) ?-> block-text ?-> block-text -> document
+  val default-format : (|
+    maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
+    table-of-contents : context -> block-boxes -> block-boxes;
+  |)
   val \hspace : [jlreq-length] inline-cmd
   val float-scheme : (|
     caption-font : nfss;
@@ -95,10 +100,16 @@ module JLReq : sig
   direct +section : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +subsection : [string?; inline-text?; inline-text?; inline-text; block-text] block-cmd
   direct +paragraph : [string?; inline-text?; inline-text; inline-text] block-cmd
+  val part-counter : int ref
+  val section-counter : int ref
+  val subsection-counter : int ref
+  val paragraph-counter : int ref
   
   direct \ref : [string] inline-cmd
   direct \ref-page : [string] inline-cmd
   direct \footnote : [inline-text] inline-cmd
+  val footnote-counter : int ref
+  val default-config-footnote : jlreq-footnote-config
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
   let default-config-document = (|
@@ -142,12 +153,7 @@ end = struct
   let-inline ctx \ref-page l = output-cross-reference ctx (l ^ `:page`)
   
   %. スペース
-  let-inline ctx \hspace len =
-    let l = match len with
-      | ZW(n) -> (get-font-size ctx) *' n
-      | Length(l) -> l
-    in
-    inline-skip l
+  let-inline ctx \hspace len = inline-skip (JLReqFont.to-length len)
   
   %. 基本版面保持
   let-mutable ref-kihonhanmen <- (|
@@ -221,7 +227,7 @@ end = struct
     label-font = Current;
     subtitle-font = Sans(ZW(1.4));
     gyodori = GyodoriCenter(4.0);
-    label-format = (fun n -> embed-string (`第` ^ (arabic n) ^ `部`));
+    label-format = (fun n -> (`第` ^ (arabic n) ^ `部`));
     reference-label-format = (fun n -> arabic n);
     subtitle-format = (fun s -> {—#s;—});
     indent = Length(0pt);
@@ -231,7 +237,7 @@ end = struct
     subtitle-indent = SubTitleIndent(false,ZW(1.0));
     reset-counters = [];    
     mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-    clear-mark-indices = [];
+    clear-mark-levels = [];
     add-to-toc = true;
   |)
   let-block ctx +part = JLReqHeading.block-heading-scheme default-config-part part-counter ctx
@@ -241,7 +247,7 @@ end = struct
     label-font = Current;
     subtitle-font = Sans(ZW(1.0));
     gyodori = GyodoriCenter(2.0);
-    label-format = (fun n -> embed-string((arabic !section-counter) ^ `.` ^ (arabic n)));
+    label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     subtitle-format = (fun s -> {—#s;—});
     indent = Length(0pt);
@@ -251,7 +257,7 @@ end = struct
     subtitle-indent = SubTitleIndent(false,ZW(1.0));
     reset-counters = [paragraph-counter];
     mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-    clear-mark-indices = [];
+    clear-mark-levels = [];
     add-to-toc = true;
   |)
   let-block ctx +subsection = JLReqHeading.block-heading-scheme default-config-subsection subsection-counter ctx
@@ -261,8 +267,8 @@ end = struct
     label-font = Current;
     subtitle-font = Sans(ZW(1.0));
     gyodori = GyodoriCenter(3.0);
-    label-format = (fun n -> embed-string(arabic n));
-    reference-label-format = (fun n -> arabic n);
+    label-format = arabic;
+    reference-label-format = arabic;
     subtitle-format = (fun s -> {—#s;—});
     indent = Length(0pt);
     end-indent = Length(0pt);
@@ -271,7 +277,7 @@ end = struct
     subtitle-indent = SubTitleIndent(false,ZW(1.0));
     reset-counters = [subsection-counter; paragraph-counter];
     mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-    clear-mark-indices = [default-config-subsection#level];
+    clear-mark-levels = [default-config-subsection#level];
     add-to-toc = true;
   |)
   let-block ctx +section = JLReqHeading.block-heading-scheme default-config-section section-counter ctx
@@ -281,27 +287,27 @@ end = struct
     indent = Length(0pt);
     after-label-space = ZW(1.0);
     after-space = ZW(1.0);
-    label-format = (fun cnt -> embed-string ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
+    label-format = (fun cnt -> ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
     reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
     mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
-    clear-mark-indices = [];
+    clear-mark-levels = [];
     reset-counters = [];
     add-to-toc = true;
   |)
   let-block ctx +paragraph = JLReqHeading.run-in-heading-scheme default-config-paragraph paragraph-counter ctx
 
 
-  let-mutable ref-footnote-counter <- 0
+  let-mutable footnote-counter <- 0
   let default-config-footnote = (|
     reference-mark-type = Inline;
     reference-mark-font = Roman(ZW(0.6));
     font = Roman(ZW(0.8));
     line-gap = ZW(0.675);
-    reference-mark-format = (fun n -> embed-string ((arabic n) ^ `)`));
+    reference-mark-format = (fun n -> (arabic n) ^ `)`);
     indent = Length(0pt);
     second-indent = ZW(1.0);
   |)
-  let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote ref-footnote-counter ctx
+  let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote footnote-counter ctx
   
   %. 段落
   let-block ctx +p inner =
@@ -335,8 +341,18 @@ end = struct
     in
     title-b +++ (skip title-b (font-size *' 1.5)) +++ author-b +++ (skip author-b (font-size *' 1.5)) +++ date-b +++ (skip date-b (font-size *' 1.5))
   
+  let toc ctx tocs = 
+    let font-size = get-font-size ctx in
+    block-skip font-size +++ 
+    line-break false false ctx (read-inline (JLReqFont.select-font (Sans(ZW(1.4))) ctx) {目次} ++ inline-fil)  +++
+    block-skip font-size +++ 
+    tocs +++
+    block-skip (font-size *' 1.7)
+
+
   let default-format = (|
     maketitle = maketitle;
+    table-of-contents = toc;
   |)
   
   %. document
@@ -452,7 +468,7 @@ end = struct
     let () = if record#show-title then ref-no-float-pages <- 1 :: !ref-no-float-pages else () in
     let page-layout pbinfo =
       let (hofb,_) = height-of-float-boxes pbinfo in
-      let xpoint = get-left-margin (JLReqPageCounter.get-page-counter pbinfo) in
+      let xpoint = get-left-margin (JLReqPageNumber.get-page-number pbinfo) in
       (|
         text-origin = (xpoint,top-space +' hofb);
         text-height = paper-height -' top-space -' bottom-space -' hofb;
@@ -465,15 +481,15 @@ end = struct
     let pagestyle pbinfo = 
       let ctx = get-standard-context text-width in
       let (h,f) = 
-        if config#two-side && ((JLReqPageCounter.get-page-counter pbinfo) mod 2 == 0) then 
+        if config#two-side && ((JLReqPageNumber.get-page-number pbinfo) mod 2 == 0) then 
           (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
         else
           (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
       in
-      let pbinfo-kai = (|pbinfo with page-number = JLReqPageCounter.get-page-counter pbinfo;|) in
+      let pbinfo-kai = (|pbinfo with page-number = JLReqPageNumber.get-page-number pbinfo;|) in
       let hc = h ctx pbinfo-kai in
       let fc = f ctx pbinfo-kai in
-      let xpoint = get-left-margin (JLReqPageCounter.get-page-counter pbinfo) in
+      let xpoint = get-left-margin (JLReqPageNumber.get-page-number pbinfo) in
       % フロートボックスの構築
       let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in
       let (output-float-boxes,rest-float,_) = 
@@ -513,12 +529,7 @@ end = struct
     in
     let toc-b = 
       if record#show-toc then 
-        let font = Sans(ZW(1.4)) in
-        block-skip (config#font-size) +++ 
-        line-break false false ctx-doc (read-inline (JLReqFont.select-font font ctx-doc) {目次} ++ inline-fil)  +++
-        block-skip (config#line-gap) +++ 
-        JLReqTOC.table-of-contents ctx-doc [] arabic +++
-        block-skip (config#font-size +' config#line-gap)
+        formats#table-of-contents ctx-doc (JLReqTOC.table-of-contents ctx-doc [])
       else
         block-nil
     in

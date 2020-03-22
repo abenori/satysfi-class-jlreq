@@ -4,7 +4,7 @@
 @import: font
 @import: mark
 @import: toc
-@import: pagecnt
+@import: pagenum
 
 type block-heading-gyodori = 
   | GyodoriCenter of float
@@ -22,7 +22,7 @@ type jlreq-block-heading-config = (|
   label-font : nfss;
   subtitle-font : nfss;
   gyodori : block-heading-gyodori;
-  label-format : int -> inline-text;
+  label-format : int -> string;
   reference-label-format : int -> string;
   subtitle-format : inline-text -> inline-text;
   indent : jlreq-length;
@@ -32,7 +32,7 @@ type jlreq-block-heading-config = (|
   second-heading-text-indent : bool * jlreq-length;
   subtitle-indent : block-heading-subtitle-indent;
   reset-counters : (int ref) list;
-  clear-mark-indices : int list;
+  clear-mark-levels : int list;
   mark-format : inline-text -> inline-text -> inline-text;
   add-to-toc : bool;
 |)
@@ -43,16 +43,17 @@ type jlreq-run-in-heading-config = (|
   indent : jlreq-length;
   after-label-space : jlreq-length;
   after-space : jlreq-length;
-  label-format : int -> inline-text;
+  label-format : int -> string;
   reference-label-format : int -> string;
   mark-format : inline-text -> inline-text -> inline-text;
-  clear-mark-indices : int list;
+  clear-mark-levels : int list;
   reset-counters : (int ref) list;
   add-to-toc : bool;
 |)
 
 module JLReqHeading : sig
   val block-heading-scheme : jlreq-block-heading-config -> int ref -> context -> string ?-> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
+  val default-config-block-heading : jlreq-block-heading-config
 
   val block-heading-scheme-nocounter : 'a -> context -> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
@@ -65,20 +66,51 @@ module JLReqHeading : sig
       end-indent : jlreq-length;
       second-heading-text-indent : jlreq-length;
       subtitle-indent : block-heading-subtitle-indent;
-      clear-mark-indices : int list;
+      clear-mark-levels : int list;
       mark-format : inline-text -> inline-text;
       add-to-toc : bool;
     |)
 
   val run-in-heading-scheme : jlreq-run-in-heading-config -> int ref -> context -> string ?-> inline-text ?-> inline-text -> inline-text -> block-boxes
+  val default-config-run-in-heading : jlreq-run-in-heading-config
 
 end = struct
-  let-inline ctx \hspace len =
-    let l = match len with
-      | ZW(n) -> (get-font-size ctx) *' n
-      | Length(l) -> l
-    in
-    inline-skip l
+  let-inline ctx \hspace len = inline-skip (JLReqFont.to-length len) 
+
+  let default-config-block-heading = (|
+    level = 0;
+    font = Current;
+    label-font = Current;
+    subtitle-font = Current;
+    gyodori = GyodoriCenter(2.0);
+    label-format = arabic;
+    reference-label-format = arabic;
+    subtitle-format = (fun s -> {—#s;—});
+    indent = Length(0pt);
+    end-indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    second-heading-text-indent = (false,ZW(1.0));
+    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    reset-counters = [];
+    clear-mark-levels = [];
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    add-to-toc = true;
+  |)
+
+  let default-config-run-in-heading = (|
+    level = 0;
+    font = Roman(ZW(1.0));
+    indent = Length(0pt);
+    after-label-space = ZW(1.0);
+    after-space = ZW(1.0);
+    label-format = arabic;
+    reference-label-format = arabic;
+    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    clear-mark-levels = [];
+    reset-counters = [];
+    add-to-toc = true;
+  |)
+
 
   %. 別行見出し
   let block-heading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
@@ -97,18 +129,18 @@ end = struct
       match label with
       | None -> inline-nil
       | Some(l) -> 
-        let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
+        let () = register-cross-reference (l ^ `:num`) (config#label-format !counter) in
         let hookfunc pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (JLReqPageCounter.get-page-counter-str pbinfo)
+          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
         in
         hook-page-break hookfunc
     in
     let tocheading = Option.from heading runninghead in
-    let i-label = config#label-format !counter in
+    let i-label = embed-string (config#label-format !counter) in
     let register-mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
        (JLReqMark.set-mark config#level (config#mark-format i-label tocheading))
-       config#clear-mark-indices
+       config#clear-mark-levels
     in
     let toc-box = 
       if config#add-to-toc then
@@ -200,8 +232,7 @@ end = struct
       label-font = Roman(ZW(1.0));
       subtitle-font = config#subtitle-font;
       gyodori = config#gyodori;
-      label-format = (fun _ -> {});
-      reference-label-format = (fun _ -> ` `);
+      label-format = (fun _ -> ` `);
       subtitle-format = config#subtitle-format;
       indent = config#indent;
       end-indent = config#end-indent;
@@ -210,7 +241,7 @@ end = struct
       subtitle-indent = config#subtitle-indent;
       reset-counters = [];
       level = config#level;
-      clear-mark-indices = config#clear-mark-indices;
+      clear-mark-levels = config#clear-mark-levels;
       mark-format = (fun cnt txt -> config#mark-format txt);
       add-to-toc = config#add-to-toc;
     |) dummy-counter ctx ?*
@@ -224,17 +255,17 @@ end = struct
       | Some(l) -> (
         let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
         let hook pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (JLReqPageCounter.get-page-counter-str pbinfo)
+          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
         in
         hook-page-break hook
       )
     in
-    let i-label = config#label-format !counter in
+    let i-label = embed-string (config#label-format !counter) in
     let markhead = Option.from heading runhead in
     let mark-box = 
       List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
        (JLReqMark.set-mark config#level (config#mark-format i-label markhead))
-       config#clear-mark-indices
+       config#clear-mark-levels
     in
     let font-size = get-font-size ctx in
     let to-length len =

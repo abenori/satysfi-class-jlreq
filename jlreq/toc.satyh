@@ -2,10 +2,11 @@
 @import: lib
 @import: font
 @require: list
+@import: pagenum
 
 module JLReqTOC : sig
-  val add-contents-line : int -> int ?-> inline-text -> inline-boxes
-  val table-of-contents : context -> (int * (inline-text -> string -> block-boxes)) list -> (int -> string) -> block-boxes
+  val add-contents-line : int -> string ?-> inline-text -> inline-boxes
+  val table-of-contents : context -> (int * (inline-text -> string -> block-boxes)) list -> block-boxes
 end = struct
 
   let-mutable ref-tocs <- [] % (level,page,toc)
@@ -17,12 +18,8 @@ end = struct
       | None -> 
         let () = ref-tocs-counter <- !ref-tocs-counter + 1 in
         let label = `jlreq-toc-label-` ^ (arabic !ref-tocs-counter) in
-        let p =
-          match get-cross-reference label with
-          | None -> None
-          | Some(pstr) -> JLReqLib.string-to-int pstr
-        in
-        let hook pbinfo _ = register-cross-reference label (JLReqPageCounter.get-page-counter-str pbinfo) in
+        let p = get-cross-reference label in
+        let hook pbinfo _ = register-cross-reference label (JLReqPageNumber.get-page-number-str pbinfo) in
         (p,hook-page-break hook)
       | Some(p) -> (Some(p),inline-nil)
     in
@@ -40,11 +37,11 @@ end = struct
   
   % 目次出力．
   % formatters : [level,(text,page)->inline-boxes]
-  let table-of-contents ctx formatters page-formatter =
+  let table-of-contents ctx formatters =
     let p-formatter p =
       match p with
       | None -> `??`
-      | Some(pp) -> page-formatter pp
+      | Some(pp) -> pp
     in
     let-rec get-minlevel lst =
       match lst with

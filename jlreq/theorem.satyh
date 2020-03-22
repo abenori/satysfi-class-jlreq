@@ -1,53 +1,60 @@
-@import: jlreq-base
-@import: jlreq-font
+@import: base
+@import: font
+@import: pagenum
+
+type jlreq-theorem-config = (|
+  before-space : jlreq-length;
+  after-space : jlreq-length;
+  font : nfss;
+  heading-font : nfss;
+  label-format : int -> string;
+  after-label-space : jlreq-length;
+|)
 
 module JLReqTheorem : sig
-  val theorem-scheme : 'a -> inline-text -> int ref -> context -> string ?-> inline-text ?-> inline-text -> block-boxes
-    constraint 'a :: (|
-      before-space : length;
-      after-space : length;
-      font : nfss;
-      heading-font : nfss;
-      reference-label-format : int -> string;
-      after-label-space : jlreq-length;
-    |)
-    
+  val theorem-scheme : jlreq-theorem-config -> inline-text -> int ref -> context -> string ?-> inline-text ?-> inline-text -> block-boxes
+  val default-config-theorem : jlreq-theorem-config
+
 end = struct
+  let default-config-theorem = (|
+    before-space = ZW(0.85);
+    after-space = ZW(0.85);
+    font = Roman(ZW(1.0));
+    heading-font = Sans(ZW(1.0));
+    label-format = arabic;
+    after-label-space = ZW(1.0);
+  |)
+
   %. 定理環境
   let theorem-scheme config theorem-name counter ctx ?:label ?:heading inner =
     let font-size = JLReqFont.font-size in
     let line-gap = JLReqFont.line-gap in
-    let to-length l = 
-      match l with
-      |ZW(n) -> font-size *' n
-      |Length(len) -> len
-    in
     let () = counter <- !counter + 1 in
-    let subtitle = match heading with
-      | None -> {}
-      | Some(s) -> {(#s;)}
-    in
     let hookbox = 
       match label with
       | None -> inline-nil
       | Some(l) -> 
-        let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
+        let () = register-cross-reference (l ^ `:num`) (config#label-format !counter) in
         let hookfunc pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
         in
         hook-page-break hookfunc
     in
     let heading-ctx = JLReqFont.select-font config#heading-font ctx in
-    let subtitle-box = 
+    let subtitle-box = match heading with
+      | None -> inline-nil
+      | Some(s) -> (inline-skip (JLReqFont.to-length (ZW(0.5)))) ++ (read-inline heading-ctx {(#s;)})
+    in
+    let heading-box = 
       hookbox ++ 
       (read-inline heading-ctx theorem-name) ++
-      (read-inline heading-ctx (embed-string (arabic !counter))) ++
-      (read-inline heading-ctx subtitle) ++
-      inline-skip (to-length config#after-label-space)
+      (read-inline heading-ctx (embed-string (config#label-format !counter))) ++
+      subtitle-box ++
+      inline-skip (JLReqFont.to-length config#after-label-space)
     in
     let inner-box = read-inline (JLReqFont.select-font config#font ctx) inner in
     let theorem-body = 
-      line-break true true ctx (subtitle-box ++ inner-box ++ inline-fil)
+      line-break true true ctx (heading-box ++ inner-box ++ inline-fil)
     in
-    block-skip config#before-space +++ theorem-body +++ block-skip config#after-space
+    block-skip (JLReqFont.to-length config#before-space) +++ theorem-body +++ block-skip (JLReqFont.to-length config#after-space)
 end
