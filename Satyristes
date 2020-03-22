@@ -1,0 +1,19 @@
+(version 0.0.2)
+
+(library
+  (name "class-jlreq")
+  (version "0.0.1")
+  (sources
+    ((package "jlreq.satyh" "./jlreq.satyh")
+     (package "base.satyh" "./base.satyh")
+     (package "font.satyh" "./font.satyh")
+     (package "footnote.satyh" "./footnote.satyh")
+     (package "heading.satyh" "./heading.satyh")
+     (package "lib.satyh" "./lib.satyh")
+     (package "mark.satyh" "./mark.satyh")
+     (package "pagenum.satyh" "./pagenum.satyh")
+     (package "pagestyle.satyh" "./pagestyle.satyh")
+     (package "theorem.satyh" "./theorem.satyh")
+     (package "toc.satyh" "./toc.satyh")))
+  (opam "satysfi-class-jlreq.opam")
+  (dependencies ()))
