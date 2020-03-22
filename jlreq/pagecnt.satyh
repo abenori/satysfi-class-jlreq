@@ -1,0 +1,28 @@
+@import: base
+
+module JLReqPageCounter : sig
+  val get-page-counter : page-info -> int
+  val set-page-counter : int -> inline-boxes
+  val get-page-counter-str : page-info -> string
+  val set-page-formatter : (int -> string) -> inline-boxes
+end = struct
+  
+  let-mutable ref-page-adjust <- 0
+  let-mutable ref-page-formatter <- arabic
+  
+  let get-page-counter pbinfo = pbinfo#page-number + !ref-page-adjust
+  let get-page-counter-str pbinfo = !ref-page-formatter (get-page-counter pbinfo)
+  
+  let set-page-counter pn =
+    let hook pbinfo _ = 
+      ref-page-adjust <- (pn - pbinfo#page-number)
+    in
+    hook-page-break hook
+  
+  let set-page-formatter fmt =
+    let hook _ _ =
+      ref-page-formatter <- fmt
+    in
+    hook-page-break hook
+
+end

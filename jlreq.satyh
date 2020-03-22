@@ -452,7 +452,7 @@ end = struct
     let () = if record#show-title then ref-no-float-pages <- 1 :: !ref-no-float-pages else () in
     let page-layout pbinfo =
       let (hofb,_) = height-of-float-boxes pbinfo in
-      let xpoint = get-left-margin pbinfo#page-number in
+      let xpoint = get-left-margin (JLReqPageCounter.get-page-counter pbinfo) in
       (|
         text-origin = (xpoint,top-space +' hofb);
         text-height = paper-height -' top-space -' bottom-space -' hofb;
@@ -465,14 +465,15 @@ end = struct
     let pagestyle pbinfo = 
       let ctx = get-standard-context text-width in
       let (h,f) = 
-        if config#two-side && (pbinfo#page-number mod 2 == 0) then 
+        if config#two-side && ((JLReqPageCounter.get-page-counter pbinfo) mod 2 == 0) then 
           (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
         else
           (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
       in
-      let hc = h ctx pbinfo in
-      let fc = f ctx pbinfo in
-      let xpoint = get-left-margin pbinfo#page-number in
+      let pbinfo-kai = (|pbinfo with page-number = JLReqPageCounter.get-page-counter pbinfo;|) in
+      let hc = h ctx pbinfo-kai in
+      let fc = f ctx pbinfo-kai in
+      let xpoint = get-left-margin (JLReqPageCounter.get-page-counter pbinfo) in
       % フロートボックスの構築
       let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in
       let (output-float-boxes,rest-float,_) = 

@@ -4,6 +4,7 @@
 @import: font
 @import: mark
 @import: toc
+@import: pagecnt
 
 type block-heading-gyodori = 
   | GyodoriCenter of float
@@ -98,7 +99,7 @@ end = struct
       | Some(l) -> 
         let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
         let hookfunc pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+          register-cross-reference (l ^ `:page`)  (JLReqPageCounter.get-page-counter-str pbinfo)
         in
         hook-page-break hookfunc
     in
@@ -223,7 +224,7 @@ end = struct
       | Some(l) -> (
         let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
         let hook pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (arabic pbinfo#page-number)
+          register-cross-reference (l ^ `:page`)  (JLReqPageCounter.get-page-counter-str pbinfo)
         in
         hook-page-break hook
       )
