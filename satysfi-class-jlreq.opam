@@ -3,7 +3,10 @@ name: "satysfi-class-jlreq"
 version: "0.0.1"
 synopsis: "A document class for SATySFi"
 authors: "Noriyuki Abe"
-license: "2-clause BSD"
+maintainer: "Noriyuki Abe"
+homepage: "https://github.com/abenori/satysfi-class-jlreq/"
+bug-reports: "https://github.com/abenori/satysfi-class-jlreq/issues"
+license: "BSD-2-Clause-FreeBSD"
 depends: [
   "satysfi" {>= "0.0.4" & < "0.0.5"}
   "satyrographos" {>= "0.0.2" & < "0.0.3"}
