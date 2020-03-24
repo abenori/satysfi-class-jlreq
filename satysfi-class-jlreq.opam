@@ -6,6 +6,7 @@ authors: "Noriyuki Abe"
 maintainer: "Noriyuki Abe"
 homepage: "https://github.com/abenori/satysfi-class-jlreq/"
 bug-reports: "https://github.com/abenori/satysfi-class-jlreq/issues"
+dev-repo: "git+https://github.com/abenori/satysfi-class-jlreq.git"
 license: "BSD-2-Clause-FreeBSD"
 depends: [
   "satysfi" {>= "0.0.4" & < "0.0.5"}
