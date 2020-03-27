@@ -4,17 +4,17 @@
 @import: mark
 
 type page-style = (|
-  odd-header : (context -> page-info -> block-boxes);
-  even-header : (context -> page-info -> block-boxes);
-  odd-footer : (context -> page-info -> block-boxes);
-  even-footer : (context -> page-info -> block-boxes);
+  odd-header : (context -> page-info -> string -> block-boxes);
+  even-header : (context -> page-info -> string -> block-boxes);
+  odd-footer : (context -> page-info -> string -> block-boxes);
+  even-footer : (context -> page-info -> string -> block-boxes);
 |)
   
 type page-style-running-head = 
   PageStyleFirstMark of int |
   PageStyleBotMark of int |
   PageStyleTopMark of int |
-  PageStyleFormat of (page-info -> inline-text)
+  PageStyleFormat of (page-info -> string -> inline-text)
 
 type page-style-position = 
   PageStyleBottomCenter |
@@ -27,15 +27,15 @@ type page-style-position =
 module JLReqPageStyle : sig
   val register-page-style-inline : page-style -> inline-boxes
   val register-page-style : page-style -> unit
-  val odd-header : (context -> page-info -> block-boxes)
-  val even-header : (context -> page-info -> block-boxes)
-  val odd-footer : (context -> page-info -> block-boxes)
-  val even-footer : (context -> page-info -> block-boxes)
+  val odd-header : (context -> page-info -> string -> block-boxes)
+  val even-header : (context -> page-info -> string -> block-boxes)
+  val odd-footer : (context -> page-info -> string -> block-boxes)
+  val even-footer : (context -> page-info -> string -> block-boxes)
 
   val page-style-scheme : (|
     nombre : ((|
       position : page-style-position;
-      nombre : (page-info -> inline-text);
+      nombre : (page-info -> string -> inline-text);
       font : nfss;
     |)) list;
     running-head : ((|
@@ -81,32 +81,32 @@ end = struct
     )
   
   
-  let get-text-list lst ctx pbinfo =
+  let get-text-list lst ctx pbinfo pagestr =
     let font-size = JLReqFont.font-size in
-    let-rec out needs-skip lst ctx pbinfo =
+    let-rec out needs-skip lst ctx pbinfo pagestr =
       match lst with
       | x :: xs -> (
         let (font,format) = x in
-        let ib = read-inline (JLReqFont.select-font font ctx) (format pbinfo) in
+        let ib = read-inline (JLReqFont.select-font font ctx) (format pbinfo pagestr) in
         let (len,_,_) = get-natural-metrics ib in
         if len >' 0pt then
           if needs-skip then
-            (inline-skip font-size) :: ib :: (out true xs ctx pbinfo)
+            (inline-skip font-size) :: ib :: (out true xs ctx pbinfo pagestr)
           else
-            ib :: (out true xs ctx pbinfo)
+            ib :: (out true xs ctx pbinfo pagestr)
         else
           if needs-skip then
-            (inline-skip font-size) :: (out false xs ctx pbinfo)
+            (inline-skip font-size) :: (out false xs ctx pbinfo pagestr)
           else
-            out false xs ctx pbinfo
+            out false xs ctx pbinfo pagestr
       )
       | [] -> []
     in
-    out false lst ctx pbinfo
+    out false lst ctx pbinfo pagestr
     
-  let output-left lst ctx pbinfo = List.fold-left (++) inline-nil (get-text-list lst ctx pbinfo)
-  let output-right lst ctx pbinfo = 
-    let lstb = get-text-list (List.reverse lst) ctx pbinfo in
+  let output-left lst ctx pbinfo pagestr = List.fold-left (++) inline-nil (get-text-list lst ctx pbinfo pagestr)
+  let output-right lst ctx pbinfo pagestr = 
+    let lstb = get-text-list (List.reverse lst) ctx pbinfo pagestr in
     List.fold-left (++) inline-nil (List.reverse lstb)
   
   let concat-nombre-runhead left right =
@@ -134,17 +134,17 @@ end = struct
     let get-nombre x = (x#font,x#nombre) in
     let get-running-head format =
       match format with
-      | PageStyleFirstMark(n) -> (fun pbinfo -> (
+      | PageStyleFirstMark(n) -> (fun pbinfo pagestr -> (
         match JLReqMark.get-first-mark n pbinfo#page-number with
         |None -> {}
         |Some(m) -> m
       ))
-      | PageStyleBotMark(n) ->  (fun pbinfo -> (
+      | PageStyleBotMark(n) ->  (fun pbinfo pagestr -> (
         match JLReqMark.get-last-mark n pbinfo#page-number with
         |None -> {}
         |Some(m) -> m
       ))
-      | PageStyleTopMark(n) ->  (fun pbinfo -> (
+      | PageStyleTopMark(n) ->  (fun pbinfo pagestr -> (
         match JLReqMark.get-last-mark n (pbinfo#page-number - 1) with
         |None -> {}
         |Some(m) -> m
@@ -177,71 +177,71 @@ end = struct
     let even-top-right = get-each PageStyleTopLeft get-even-running-head false in
     let even-top-center = get-each PageStyleTopCenter get-even-running-head false in
     
-    let odd-header ctx pbinfo =
+    let odd-header ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
           concat-nombre-runhead
-            (output-left odd-top-left#runhead ctx pbinfo)
-            (output-left odd-top-left#nombre ctx pbinfo)
+            (output-left odd-top-left#runhead ctx pbinfo pagestr)
+            (output-left odd-top-left#nombre ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead 
-            (output-left odd-top-center#runhead ctx pbinfo)
-            (output-left odd-top-center#nombre ctx pbinfo)
+            (output-left odd-top-center#runhead ctx pbinfo pagestr)
+            (output-left odd-top-center#nombre ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-right odd-top-right#runhead ctx pbinfo)
-            (output-right odd-top-right#nombre ctx pbinfo)
+            (output-right odd-top-right#runhead ctx pbinfo pagestr)
+            (output-right odd-top-right#nombre ctx pbinfo pagestr)
         )
       )
     in
-    let odd-footer ctx pbinfo =
+    let odd-footer ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
           concat-nombre-runhead
-            (output-left odd-bottom-left#runhead ctx pbinfo)
-            (output-left odd-bottom-left#nombre ctx pbinfo)
+            (output-left odd-bottom-left#runhead ctx pbinfo pagestr)
+            (output-left odd-bottom-left#nombre ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-left odd-bottom-center#runhead ctx pbinfo)
-            (output-left odd-bottom-center#nombre ctx pbinfo)
+            (output-left odd-bottom-center#runhead ctx pbinfo pagestr)
+            (output-left odd-bottom-center#nombre ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-right odd-bottom-right#runhead ctx pbinfo)
-            (output-right odd-bottom-right#nombre ctx pbinfo)
+            (output-right odd-bottom-right#runhead ctx pbinfo pagestr)
+            (output-right odd-bottom-right#nombre ctx pbinfo pagestr)
         )
       )
     in
-    let even-header ctx pbinfo =
+    let even-header ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
           concat-nombre-runhead
-            (output-left even-top-left#nombre ctx pbinfo)
-            (output-left even-top-left#runhead ctx pbinfo)
+            (output-left even-top-left#nombre ctx pbinfo pagestr)
+            (output-left even-top-left#runhead ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-left even-top-center#nombre ctx pbinfo)
-            (output-left even-top-center#runhead ctx pbinfo)
+            (output-left even-top-center#nombre ctx pbinfo pagestr)
+            (output-left even-top-center#runhead ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-right even-top-right#nombre ctx pbinfo)
-            (output-right even-top-right#runhead ctx pbinfo)
+            (output-right even-top-right#nombre ctx pbinfo pagestr)
+            (output-right even-top-right#runhead ctx pbinfo pagestr)
         )
       )
     in
-    let even-footer ctx pbinfo =
+    let even-footer ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
           concat-nombre-runhead
-            (output-left even-bottom-left#nombre ctx pbinfo)
-            (output-left even-bottom-left#runhead ctx pbinfo)
+            (output-left even-bottom-left#nombre ctx pbinfo pagestr)
+            (output-left even-bottom-left#runhead ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-left even-bottom-center#nombre ctx pbinfo)
-            (output-left even-bottom-center#runhead ctx pbinfo)
+            (output-left even-bottom-center#nombre ctx pbinfo pagestr)
+            (output-left even-bottom-center#runhead ctx pbinfo pagestr)
         ) (
           concat-nombre-runhead
-            (output-right even-bottom-right#nombre ctx pbinfo)
-            (output-right even-bottom-right#runhead ctx pbinfo)
+            (output-right even-bottom-right#nombre ctx pbinfo pagestr)
+            (output-right even-bottom-right#runhead ctx pbinfo pagestr)
         )
       )
     in
@@ -255,7 +255,7 @@ end = struct
   let-mutable ref-page-style <- page-style-scheme (|
     nombre = [(|
       position = PageStyleBottomCenter;
-      nombre = (fun pbinfo -> embed-string (arabic pbinfo#page-number));
+      nombre = (fun _ pagestr -> embed-string (pagestr));
       font = Roman(ZW(0.8));
     |);];
     running-head = [];

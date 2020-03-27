@@ -487,9 +487,8 @@ end = struct
         else
           (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
       in
-      let pbinfo-kai = (|pbinfo with page-number = JLReqPageNumber.get-page-number pbinfo;|) in
-      let hc = h ctx pbinfo-kai in
-      let fc = f ctx pbinfo-kai in
+      let hc = h ctx pbinfo (JLReqPageNumber.get-page-number-str pbinfo) in
+      let fc = f ctx pbinfo (JLReqPageNumber.get-page-number-str pbinfo) in
       let xpoint = get-left-margin (JLReqPageNumber.get-page-number pbinfo) in
       % フロートボックスの構築
       let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in

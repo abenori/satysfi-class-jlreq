@@ -28,6 +28,7 @@ end = struct
     in
     hook-page-break hook
   
+  % ここで渡すpageは絶対的なページ
   let get-mark isfirst index page =
     let-rec aux lst =
       match lst with

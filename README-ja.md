@@ -3,7 +3,7 @@
 ## 使い方
 基本的な使い方は，標準添付のStdJaなどと同様です．つまり
 ```
-@require jlreq
+@require: class-jlreq/jlreq
   
 document(|
   title = {タイトル};
@@ -46,7 +46,7 @@ document(|
 >
 ```
 
-そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やboo値（`true`または`false`）で指定することも多いですが，jlreq特有の設定方法として以下の二つがあります．
+そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やbool値（`true`または`false`）で指定することも多いですが，jlreq特有の設定方法として以下の二つがあります．
 
 * `jlreq長さ`: 以下で`jlreq長さ`として出てきた項目に対しては，次のどちらかで設定をします．
     - `Length(<長さ>)`: `<長さ>`そのもの．`<長さ>`はlength型．
@@ -106,7 +106,7 @@ let page-style-headings = JLReqPageStyle.page-style-scheme (|
   nombre = [% ノンブルの指定
     (|
       position = PageStyleBottomCenter; % 場所はフッタの真ん中
-      nombre = (fun pb -> embed-string (arabic pb#page-number)); % ノンブルの出力．ページ数をそのまま出力する．
+      nombre = (fun pbinfo ps -> embed-string (ps)); % ノンブルの出力．ページ数をそのまま出力する．
       font = Roman(ZW(0.8)); % フォント指定
     |);
   ];
@@ -139,8 +139,8 @@ let-inline ctx \set-page-style ps = JLReqPageStyle.register-page-style-inline ps
 上のように，`JlreqPageStyle.page-style-scheme`ではノンブルと柱を独立に設定します．複数のノンブル，柱を設定することができ，各々リストで渡します．各設定では以下を使います．
 * `position`: ノンブル，柱共通です．`PageStyleBottomCenter`，`PageStyleBottomLeft`，`PageStyleBottomRight`，`PageStyleTopCenter`，`PageStyleTopLeft`，`PageStyleTopRight`の六カ所から選びます．
 * `font`: ノンブル，柱共通です．フォントを指定します．
-* `nombre`: ノンブル用です．ノンブルの出力を指定します．`(|page-number : int;|)`という型を受け取り，出力する`inline-boxes`を返す関数を設定します．
-* `odd`: 柱用です．奇数ページの柱を指定します．`+section`のような見出しの中身の出力を設定できます．見出しにはレベルが設定されていて，このレベルを使い設定を行います．`+section`のデフォルトの設定は`JLReq.default-config-section`に入っていて，そのレベルは`JLReq.default-config-section#level`で参照できます．`+part`，`+subsection`．`+paragraph`もすべて同様です．ここの設定は，`PageStyleFirstMark(<見出しレベル>)`，`PageStyleBotMark(<見出しレベル>)`，`PageStyleTopMark(<見出しレベル>)`のいずれかを指定します．それぞれ，該当ページの最初の見出し，最後の見出しおよび前ページの最後の見出しに対応します．または，`PageStyleFormat(f)`とすると，`f`の戻り値が出力されます．ただし，`f`は`(|page-number; int;|)`を受け取り`inline-text`を返す関数です．
+* `nombre`: ノンブル用です．ノンブルの出力を指定します．二つの引数を受け取り`inline-text`を返す関数を設定します．引数の二つ目は`string`型のページ数です．一つ目の引数は`(|page-number : int;|)`という型です．ここでの`page-number`はPDFの1ページ目から数えたページ数で，実際に出力されるページ数（これは第二引数で取得できる）とは異なることがあります．
+* `odd`: 柱用です．奇数ページの柱を指定します．`+section`のような見出しの中身の出力を設定できます．見出しにはレベルが設定されていて，このレベルを使い設定を行います．`+section`のデフォルトの設定は`JLReq.default-config-section`に入っていて，そのレベルは`JLReq.default-config-section#level`で参照できます．`+part`，`+subsection`．`+paragraph`もすべて同様です．ここの設定は，`PageStyleFirstMark(<見出しレベル>)`，`PageStyleBotMark(<見出しレベル>)`，`PageStyleTopMark(<見出しレベル>)`のいずれかを指定します．それぞれ，該当ページの最初の見出し，最後の見出しおよび前ページの最後の見出しに対応します．または，`PageStyleFormat(f)`とすると，`f`の戻り値が出力されます．ただし，`f`は`(|page-number; int;|)`とページ数（`string`）を受け取り`inline-text`を返す関数です．引数の意味については`nombre`と同じです．
 * `even`: 偶数ページの柱です．ただし，`document`関数で`two-side = false;`が指定されている場合は，この項目は無視され，ページによらず`odd`で指定した柱が出力されます．
 
 
@@ -214,7 +214,7 @@ let-block ctx +part = JLReqHeading.block-heading-scheme (|JLReq.default-config-p
 * `mark-format`：柱の書式を指定します．ラベルと見出しの二引数を受け取り（ともにinline-text），inline-textを返す関数です．
 
 ### 同行見出し
-`level`, `font`. `indent`, `after-label-space`, `after-space`, `label-format`, reference-label-format`, `mark-format`, `clear-mark-levels`, `reset-counters`が指定でき，`after-space`以外は`blockheading-scheme`と同じ意味を持ちます．`after-space`は見出し文字列と本文との間の空きをjlreq長さで指定します．
+`level`, `font`, `indent`, `after-label-space`, `after-space`, `label-format`, `reference-label-format`, `mark-format`, `clear-mark-levels`, `reset-counters`が指定でき，`after-space`以外は`blockheading-scheme`と同じ意味を持ちます．`after-space`は見出し文字列と本文との間の空きをjlreq長さで指定します．
 ## 脚注
 脚注の書式を変更するには
 ```
