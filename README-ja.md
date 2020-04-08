@@ -275,3 +275,4 @@ let roman n = <整数値nをローマ数字のstring型として出力する関�
 let-inline ctx \set-page-str f = JLReqPageNumber.set-page-format f
 ```
 として，`\set-page-str(roman);`とするとそこからローマ数字として出力されるようになります．
+
