@@ -1,5 +1,14 @@
 # jlreq for SATySFi
 
+## インストール
+[Satyrographos](https://github.com/na4zagin3/satyrographos)を使ってインストールができます．
+
+```sh
+opam pin add https://github.com/abenori/satysfi-class-jlreq.git
+opam install satysfi-class-jlreq
+satyrographos install
+```
+
 ## 使い方
 基本的な使い方は，標準添付のStdJaなどと同様です．つまり
 ```
@@ -276,3 +285,6 @@ let-inline ctx \set-page-str f = JLReqPageNumber.set-page-format f
 ```
 として，`\set-page-str(roman);`とするとそこからローマ数字として出力されるようになります．
 
+## 履歴
+* 0.0.1 (2020/03/22) 
+    - 最初のバージョン
