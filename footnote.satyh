@@ -32,7 +32,7 @@ end = struct
         ]
       in
       let b = inline-graphics length (depth +' shift-y) height draw in
-      discretionary 10000 b b b
+      (discretionary 10000 b b inline-nil) ++ (discretionary 10000 inline-nil inline-nil inline-nil)
     | Interlinear ->
       let draw (x,y) =
         [
