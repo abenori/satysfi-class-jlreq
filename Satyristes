@@ -13,6 +13,7 @@
      (package "mark.satyh" "./mark.satyh")
      (package "pagenum.satyh" "./pagenum.satyh")
      (package "pagestyle.satyh" "./pagestyle.satyh")
+     (package "paragraph.satyh" "./paragraph.satyh")
      (package "theorem.satyh" "./theorem.satyh")
      (package "toc.satyh" "./toc.satyh")))
   (opam "satysfi-class-jlreq.opam")
