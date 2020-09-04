@@ -1,6 +1,7 @@
 @import: base
 @import: font
 @import: pagenum
+@import: paragraph
 
 type jlreq-theorem-config = (|
   before-space : jlreq-length;
@@ -12,7 +13,7 @@ type jlreq-theorem-config = (|
 |)
 
 module JLReqTheorem : sig
-  val theorem-scheme : jlreq-theorem-config -> inline-text -> int ref -> context -> string ?-> inline-text ?-> inline-text -> block-boxes
+  val theorem-scheme : jlreq-theorem-config -> inline-text -> int ref -> context -> string ?-> inline-text ?-> block-text -> block-boxes
   val default-config-theorem : jlreq-theorem-config
 
 end = struct
@@ -52,9 +53,7 @@ end = struct
       subtitle-box ++
       inline-skip (JLReqFont.to-length config#after-label-space)
     in
-    let inner-box = read-inline (JLReqFont.select-font config#font ctx) inner in
-    let theorem-body = 
-      line-break true true ctx (heading-box ++ inner-box ++ inline-fil)
-    in
-    block-skip (JLReqFont.to-length config#before-space) +++ theorem-body +++ block-skip (JLReqFont.to-length config#after-space)
+    let () = JLReqParagraph.set-paragraph-top-text heading-box in
+    let bb = read-block ctx inner in
+    block-skip (JLReqFont.to-length config#before-space) +++ bb +++ block-skip (JLReqFont.to-length config#after-space) 
 end

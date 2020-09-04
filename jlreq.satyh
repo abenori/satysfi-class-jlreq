@@ -10,6 +10,7 @@
 @import: pagestyle
 @import: toc
 @import: theorem
+@import: paragraph
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto
@@ -311,14 +312,8 @@ end = struct
   let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote footnote-counter ctx
   
   %. 段落
-  let-block ctx +p inner =
-    let font-size = get-font-size ctx in
-    let paragraph = (inline-skip font-size) ++ (read-inline ctx inner) ++ inline-fil in
-    line-break true true ctx paragraph
-
-  let-block ctx +pn inner =
-    let paragraph = (read-inline ctx inner) ++ inline-fil in
-    line-break true true ctx paragraph
+  let-block ctx +p = JLReqParagraph.paragraph-scheme (| indent = ZW(1.0);|) ctx
+  let-block ctx +pn = JLReqParagraph.paragraph-scheme (| indent = Length(0pt);|) ctx
   
   %. maketitle
   let maketitle ctx title author date =
