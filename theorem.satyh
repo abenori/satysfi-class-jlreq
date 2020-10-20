@@ -2,6 +2,7 @@
 @import: font
 @import: pagenum
 @import: paragraph
+@import: lib
 
 type jlreq-theorem-config = (|
   before-space : jlreq-length;
@@ -18,8 +19,8 @@ module JLReqTheorem : sig
 
 end = struct
   let default-config-theorem = (|
-    before-space = ZW(0.85);
-    after-space = ZW(0.85);
+    before-space = ZW(1.7);
+    after-space = ZW(1.7);
     font = Roman(ZW(1.0));
     heading-font = Sans(ZW(1.0));
     label-format = arabic;
@@ -54,6 +55,9 @@ end = struct
       inline-skip (JLReqFont.to-length config#after-label-space)
     in
     let () = JLReqParagraph.set-paragraph-top-text heading-box in
-    let bb = read-block ctx inner in
-    block-skip (JLReqFont.to-length config#before-space) +++ bb +++ block-skip (JLReqFont.to-length config#after-space) 
+    let decos =
+      let deco _ _ _ _ = [] in
+      (deco, deco, deco, deco)
+    in
+    JLReqLib.set-margin ctx true true (JLReqFont.to-length config#before-space) (JLReqFont.to-length config#after-space) (read-block ctx inner)
 end

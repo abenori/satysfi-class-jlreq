@@ -1,5 +1,8 @@
+@require: base/length
+
 module JLReqLib : sig
   val string-to-int : string -> int option
+  val set-margin : context -> bool -> bool -> length -> length -> block-boxes -> block-boxes
 end = struct
   let-rec string-to-int s =
     let len = string-length s in
@@ -27,4 +30,19 @@ end = struct
         |None -> None
         |Some(l) -> Some(10 * l + m)
 
+  let set-margin ctx before-breakable after-breakable before-margin after-margin inner =
+    let large-skip = 1000000pt in
+    let inline-bb = inline-graphics 10pt 10pt 10pt (fun pt -> []) in
+    let dummy-txt = line-break false false (set-paragraph-margin 0pt 0pt ctx) (inline-bb ++ inline-fil) in
+    let dummy-len = get-natural-length (dummy-txt +++ dummy-txt) in
+    (line-break before-breakable false (set-paragraph-margin before-margin large-skip ctx) (inline-bb ++ inline-fil)) +++
+    (block-skip (0pt -' (large-skip *' 2.0) -' dummy-len)) +++
+    (line-break false false (set-paragraph-margin 0pt large-skip ctx) (inline-bb ++ inline-fil)) +++
+    inner +++
+    (line-break false false (set-paragraph-margin large-skip 0pt ctx) (inline-bb ++ inline-fil)) +++
+    (block-skip (0pt -' (large-skip *' 2.0) -' dummy-len)) +++
+    (line-break false after-breakable (set-paragraph-margin large-skip after-margin ctx) (inline-bb ++ inline-fil))
+
+
 end
+

@@ -3,7 +3,7 @@
 
 module JLReqParagraph : sig
   val set-paragraph-top-text : inline-boxes -> unit
-%  val get-paragraph-top-text : inline-boxes
+  val get-paragraph-top-text : inline-boxes
   val set-skip-last-fil : bool -> unit
   val paragraph-scheme : (|
     indent : jlreq-length
@@ -17,6 +17,7 @@ let-mutable ref-skip-last-fil <- false
 
 let set-paragraph-top-text txt = ref-paragraph-text <- txt
 let set-skip-last-fil b = ref-skip-last-fil <- b
+let get-paragraph-top-text = !ref-paragraph-text
 
 let paragraph-scheme opt ctx txt =
   let len = JLReqFont.to-length opt#indent in
