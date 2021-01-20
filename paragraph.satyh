@@ -1,13 +1,13 @@
-@import: font
 @require: base/length
+@import: lib
 
 module JLReqParagraph : sig
   val set-paragraph-top-text : inline-boxes -> unit
   val get-paragraph-top-text : inline-boxes
   val set-skip-last-fil : bool -> unit
-  val paragraph-scheme : (|
-    indent : jlreq-length
-  |) -> context -> inline-text -> block-boxes
+  val get-paragraph-boxes : (|
+    indent : (length -> (string -> length option) -> length);
+  |) -> context -> inline-text -> inline-boxes
 
 
 end = struct
@@ -19,15 +19,15 @@ let set-paragraph-top-text txt = ref-paragraph-text <- txt
 let set-skip-last-fil b = ref-skip-last-fil <- b
 let get-paragraph-top-text = !ref-paragraph-text
 
-let paragraph-scheme opt ctx txt =
-  let len = JLReqFont.to-length opt#indent in
+let get-paragraph-boxes opt ctx txt =
+	let len = JLReqLib.get-length ctx opt#indent in
   let ib = !ref-paragraph-text in
   let mainb = read-inline ctx txt in
   let () = ref-paragraph-text <- inline-nil in
   let skip-last = !ref-skip-last-fil in
   let () = ref-skip-last-fil <- false in
   let (w,_,_) = get-natural-metrics ib in
-  line-break true true ctx (
+  (
     (if Length.(w == 0pt) then (inline-skip len) else inline-nil)
     ++ ib ++ mainb
     ++ (if skip-last then inline-nil else inline-fil)

@@ -2,9 +2,11 @@
 @require: option
 @require: list
 @require: math
+@require: fss/fss
+@require: fss/style
+@require: fss/fonts
 @import: lib
 @import: base
-@import: font
 @import: heading
 @import: footnote
 @import: pagestyle
@@ -14,26 +16,26 @@
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto
-  | HorizontalCenter of jlreq-length
+  | HorizontalCenter of (length -> (string -> length option) -> length)
   | Gutter of (|
-      line-length : jlreq-length;
-      gutter : jlreq-length;
+      line-length : (length -> (string -> length option) -> length);
+      gutter : (length -> (string -> length option) -> length);
    |)
   | GutterFore-edge of (|
-      gutter : jlreq-length;
-      fore-edge : jlreq-length;
+      gutter : (length -> (string -> length option) -> length);
+      fore-edge : (length -> (string -> length option) -> length);
     |)
 
 type kihon-hanmen-vertical =
    | VerticalAuto
-   | VerticalCenter of jlreq-length
+   | VerticalCenter of (length -> (string -> length option) -> length)
    | Top of (|
-       block-length : jlreq-length;
-       top-space : jlreq-length;
+       block-length : (length -> (string -> length option) -> length);
+       top-space : (length -> (string -> length option) -> length);
      |)
    | TopBottom of (|
-       top-space : jlreq-length;
-       bottom-space : jlreq-length;
+       top-space : (length -> (string -> length option) -> length);
+       bottom-space : (length -> (string -> length option) -> length);
      |)
 
 type config-cjkfont =
@@ -56,14 +58,13 @@ type config-document = (|
   paper-size : page;
   horizontal-layout : kihon-hanmen-horizontal;
   vertical-layout : kihon-hanmen-vertical;
-  header-sep : jlreq-length;
-  header-height : jlreq-length;
+  header-sep : (length -> (string -> length option) -> length);
+  header-height : (length -> (string -> length option) -> length);
   line-gap : length;
   font-size : length;
-  cjk-font : config-cjkfont;
-  latin-font : config-latinfont;
+  font : fss-font-set;
   column : int;
-  column-gap : jlreq-length;
+  column-gap : (length -> (string -> length option) -> length);
 |)
 
 module JLReq : sig
@@ -88,11 +89,11 @@ module JLReq : sig
     maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     table-of-contents : context -> block-boxes -> block-boxes;
   |)
-  val \hspace : [jlreq-length] inline-cmd
+  val \hspace : [(length -> (string -> length option) -> length)] inline-cmd
   val float-scheme : (|
-    caption-font : nfss;
-    caption-label-font : nfss;
-    caption-after-label-space : jlreq-length;
+    caption-font : style list;
+    caption-label-font : style list;
+    caption-after-label-space : (length -> (string -> length option) -> length);
     caption-label-format : int -> inline-text;
   |) -> int ref -> context -> string ?-> inline-text -> block-text -> inline-boxes
   
@@ -114,19 +115,22 @@ module JLReq : sig
   val default-config-footnote : jlreq-footnote-config
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
+  let get-zw-length ratio l f =
+    match (f `ja`) with
+    | None -> l *' ratio
+    | Some(ll) -> ll *' ratio
   let default-config-document = (|
     two-side = false;
     paper-size = A4Paper;
     horizontal-layout = HorizontalAuto;
     vertical-layout = VerticalAuto;
-    header-sep  = ZW(1.0);
-    header-height = ZW(1.0);
+    header-sep  = (get-zw-length 1.0);
+    header-height = (get-zw-length 1.0);
     font-size = 10pt;
     line-gap = 7pt;
-    cjk-font = CJKFont-preset-ipaex(1.0);
-    latin-font = LatinFont-preset-lmodern(1.0);
+    font = FssFonts.default-font-set;
     column = 1;
-    column-gap = ZW(2.0);
+    column-gap = (get-zw-length 2.0);
   |)
   
   let paper-size-to-width-height ps = 
@@ -155,7 +159,7 @@ end = struct
   let-inline ctx \ref-page l = output-cross-reference ctx (l ^ `:page`)
   
   %. スペース
-  let-inline ctx \hspace len = inline-skip (JLReqFont.to-length len)
+  let-inline ctx \hspace len = inline-skip (JLReqLib.get-length ctx len)
   
   %. 基本版面保持
   let-mutable ref-kihonhanmen <- (|
@@ -164,19 +168,21 @@ end = struct
   %. フロート
   let-mutable ref-float-boxes <- []
   let-mutable ref-no-float-pages <- []
-  let float-margin = ZW(1.2)
+  let float-margin = (fun l -> l *' 1.2)
   let float-scheme config counter ctx ?:label caption inner =
+  	let font-size = get-font-size ctx in
     let () = counter <- !counter + 1 in
     let () = match label with
       |None -> ()
       |Some(l) -> register-cross-reference (l ^ `:num`) (arabic !counter)
     in
-    let caption-ctx = JLReqFont.select-font config#caption-font ctx in
-    let label-ctx = JLReqFont.select-font config#caption-label-font caption-ctx in
+%    let caption-ctx = JLReqFont.select-font config#caption-font ctx in
+%    let label-ctx = JLReqFont.select-font config#caption-label-font caption-ctx in
+    let caption-it = config#caption-label-format !counter in
     let b-caption =
-      (read-inline label-ctx (config#caption-label-format !counter)) ++ 
-      (inline-skip (JLReqFont.to-length config#caption-after-label-space)) ++
-      (read-inline caption-ctx caption)
+      (read-inline ctx {\font-style (config#caption-font) {#caption-it;}}) ++
+      (inline-skip (JLReqLib.get-length ctx config#caption-after-label-space)) ++
+      (read-inline ctx {\font-style (config#caption-font) {#caption;}})
     in
     let bb-inner =
       let d (_, _) _ _ _ = [] in
@@ -207,9 +213,9 @@ end = struct
   
   let-mutable figure-counter <- 0
   let-inline ctx \figure = float-scheme (|
-      caption-font = Sans(ZW(1.0));
-      caption-label-font = Sans(ZW(1.0));
-      caption-after-label-space = ZW(1.0);
+      caption-font = [bold];
+      caption-label-font = [bold];
+      caption-after-label-space = (get-zw-length 1.0);
       caption-label-format = (fun n -> embed-string (arabic n));
     |) figure-counter ctx
 
@@ -225,73 +231,73 @@ end = struct
   let paragraph-level = 2
   let default-config-part = (|
     level = -1;
-    font = Sans(ZW(1.7));
-    label-font = Current;
-    subtitle-font = Sans(ZW(1.4));
+    font = [bold;with-font-size (fun l -> l *' 1.7)];
+    label-font = [];
+    subtitle-font = [bold;with-font-size (fun l -> l *' 1.4)];
     gyodori = GyodoriCenter(4.0);
     label-format = (fun n -> (`第` ^ (arabic n) ^ `部`));
     reference-label-format = (fun n -> arabic n);
     subtitle-format = (fun s -> {—#s;—});
-    indent = Length(0pt);
-    end-indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    second-heading-text-indent = (false,ZW(1.0));
-    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    indent = (fun _ _ -> 0pt);
+    end-indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    second-heading-text-indent = (false,(get-zw-length 1.0));
+    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
     reset-counters = [];    
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     clear-mark-levels = [];
     add-to-toc = true;
   |)
   let-block ctx +part = JLReqHeading.block-heading-scheme default-config-part part-counter ctx
   let default-config-subsection = (|
     level = 1;
-    font = Sans(ZW(1.2));
-    label-font = Current;
-    subtitle-font = Sans(ZW(1.0));
+    font = [bold;with-font-size (fun l -> l *' 1.2)];
+    label-font = [];
+    subtitle-font = [bold];
     gyodori = GyodoriCenter(2.0);
     label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     subtitle-format = (fun s -> {—#s;—});
-    indent = Length(0pt);
-    end-indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    second-heading-text-indent = (false,ZW(1.0));
-    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    indent = (fun _ _ -> 0pt);
+    end-indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    second-heading-text-indent = (false,(get-zw-length 1.0));
+    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
     reset-counters = [paragraph-counter];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     clear-mark-levels = [];
     add-to-toc = true;
   |)
   let-block ctx +subsection = JLReqHeading.block-heading-scheme default-config-subsection subsection-counter ctx
   let default-config-section = (|
     level = 0;
-    font = Sans(ZW(1.4));
-    label-font = Current;
-    subtitle-font = Sans(ZW(1.0));
+    font = [bold;with-font-size (fun l -> l *' 1.4)];
+    label-font = [];
+    subtitle-font = [bold];
     gyodori = GyodoriCenter(3.0);
     label-format = arabic;
     reference-label-format = arabic;
     subtitle-format = (fun s -> {—#s;—});
-    indent = Length(0pt);
-    end-indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    second-heading-text-indent = (false,ZW(1.0));
-    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    indent = (fun _ _ -> 0pt);
+    end-indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    second-heading-text-indent = (false,(get-zw-length 1.0));
+    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
     reset-counters = [subsection-counter; paragraph-counter];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     clear-mark-levels = [default-config-subsection#level];
     add-to-toc = true;
   |)
   let-block ctx +section = JLReqHeading.block-heading-scheme default-config-section section-counter ctx
   let default-config-paragraph = (|
     level = 2;
-    font = Sans(ZW(1.0));
-    indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    after-space = ZW(1.0);
+    font = [bold];
+    indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    after-space = (get-zw-length 1.0);
     label-format = (fun cnt -> ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
     reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     clear-mark-levels = [];
     reset-counters = [];
     add-to-toc = true;
@@ -302,32 +308,32 @@ end = struct
   let-mutable footnote-counter <- 0
   let default-config-footnote = (|
     reference-mark-type = Inline;
-    reference-mark-font = Roman(ZW(0.6));
-    font = Roman(ZW(0.8));
-    line-gap = ZW(0.675);
+    reference-mark-font = [with-font-size (fun l -> l *' 0.6)];
+    font = [with-font-size (fun l -> l *' 0.68)];
+    line-gap = (get-zw-length 0.675);
     reference-mark-format = (fun n -> (arabic n) ^ `)`);
-    indent = Length(0pt);
-    second-indent = ZW(1.0);
+    indent = (fun _ _ -> 0pt);
+    second-indent = (get-zw-length 1.0);
   |)
   let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote footnote-counter ctx
   
   %. 段落
-  let-block ctx +p = JLReqParagraph.paragraph-scheme (| indent = ZW(1.0);|) ctx
-  let-block ctx +pn = JLReqParagraph.paragraph-scheme (| indent = Length(0pt);|) ctx
+  let-block ctx +p it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = (get-zw-length 1.0);|) ctx it)
+  let-block ctx +pn it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = (fun _ _ -> 0pt);|) ctx it)
   
   %. maketitle
   let maketitle ctx title author date =
     let get-b font txt =
-      let ib = read-inline (JLReqFont.select-font font ctx) txt in
+      let ib = read-inline ctx {\font-style (font) {#txt;}} in
       let (len,_,_) = get-natural-metrics ib in
       if len >' 0pt then
         line-break false false ctx (inline-fil ++ ib ++ inline-fil)
       else
         block-nil
     in
-    let title-b = get-b (Roman(ZW(1.7))) title in
-    let author-b = get-b (Roman(ZW(1.3))) author in
-    let date-b = get-b (Roman(ZW(1.3))) date in
+    let title-b = get-b [with-font-size (fun l -> l *' 1.7)] title in
+    let author-b = get-b [with-font-size (fun l -> l *' 1.3)] author in
+    let date-b = get-b [with-font-size (fun l -> l *' 1.3)] date in
     let font-size = get-font-size ctx in
     let skip box length =
       if (get-natural-length box) >' 0pt then
@@ -340,7 +346,7 @@ end = struct
   let toc ctx tocs = 
     let font-size = get-font-size ctx in
     block-skip font-size +++ 
-    line-break false false ctx (read-inline (JLReqFont.select-font (Sans(ZW(1.4))) ctx) {目次} ++ inline-fil)  +++
+    line-break false false ctx (read-inline ctx {\font-style [bold;with-font-size (fun l -> l *' 1.4)] {目次}} ++ inline-fil) +++
     block-skip font-size +++ 
     tocs +++
     block-skip (font-size *' 1.7)
@@ -352,6 +358,11 @@ end = struct
   |)
   
   %. document
+  let-block ctx +maketitle mf title author date = mf ctx title author date
+  let-block ctx +toc gf tf = 
+    let tocs = gf ctx [] in
+    tf ctx tocs
+
   let document record ?:configopt ?:formatopt ?:frontmatter inner =
     let config = Option.from default-config-document configopt in
     let formats = Option.from default-format formatopt in
@@ -362,29 +373,6 @@ end = struct
       else
         ()
     in
-    % フォント設定
-    let cjkfont = 
-      match config#cjk-font with
-      | CJKFont-preset-ipaex(scale) -> (|
-          mincho = (`ipaexm`, scale, 0.0);
-          gothic = (`ipaexg`, scale, 0.0);
-        |)
-      | CJKFont(f) -> f
-    in
-    let latinfont = 
-      match config#latin-font with
-      | LatinFont-preset-lmodern(scale) -> (|
-          roman = (`lmroman`, scale, 0.0);
-          italic = (`lmroman-it`, scale, 0.0);
-          sans = (`lmroman-b`, scale, 0.0);
-        |)
-      | LatinFont(f) -> f
-    in
-    let () = JLReqFont.register-font config#font-size config#line-gap (|
-      cjk = cjkfont;
-      latin = latinfont;
-    |)
-    in
     let get-standard-context width = 
       get-initial-context width (command \math) 
         |> set-dominant-wide-script Kana
@@ -392,17 +380,15 @@ end = struct
         |> set-language HanIdeographic Japanese
         |> set-dominant-narrow-script Latin
         |> set-language Latin English
-        |> set-font Kana cjkfont#mincho
-        |> set-font HanIdeographic cjkfont#mincho
-        |> set-font Latin latinfont#roman
         |> set-math-font `lmodern`
         |> set-hyphen-penalty 100
         |> set-min-gap-of-lines 0pt
     in
 
-
     let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
-    let column-gap = JLReqFont.to-length config#column-gap in
+    % 30cmに意味はない
+    let get-length = JLReqLib.get-length (get-standard-context 30cm) in
+    let column-gap = get-length config#column-gap in
     let (odd-left-margin,odd-right-margin) = 
       match config#horizontal-layout with 
       | HorizontalAuto -> 
@@ -410,16 +396,16 @@ end = struct
         let twmod = config#font-size *' (float (round (tw /' config#font-size))) in
         ((paper-width -' twmod) *' 0.5,(paper-width -' twmod) *' 0.5)
       | HorizontalCenter(n) -> 
-        let len = JLReqFont.to-length n in
+        let len = get-length n in
         let m = (paper-width -' len) *' 0.5 in
         (m,m)
       | Gutter(gd) -> 
-        let len = ((JLReqFont.to-length gd#line-length) *' (float config#column)) +'  (column-gap *' (float (config#column - 1))) in
-        let gutter = JLReqFont.to-length gd#gutter in
+        let len = ((get-length gd#line-length) *' (float config#column)) +'  (column-gap *' (float (config#column - 1))) in
+        let gutter = get-length gd#gutter in
         (gutter,paper-width -' len -' gutter)
       | GutterFore-edge(gfe) ->
-        let gutter = JLReqFont.to-length gfe#gutter in
-        let fore-edge = JLReqFont.to-length gfe#fore-edge in
+        let gutter = get-length gfe#gutter in
+        let fore-edge = get-length gfe#fore-edge in
         (gutter,fore-edge)
     in
     % 1.0ptはおまじない……
@@ -428,16 +414,16 @@ end = struct
       match config#vertical-layout with
       | VerticalAuto -> (paper-height *' 0.125,paper-height *' 0.125)
       | VerticalCenter(n) ->
-        let len = JLReqFont.to-length n in
-        let s= (paper-height -' len) *' 0.5 in
+        let len = get-length n in
+        let s = (paper-height -' len) *' 0.5 in
         (s,s)
       | Top(td) ->
-        let top-space = JLReqFont.to-length td#top-space in
-        let len = JLReqFont.to-length td#block-length in
+        let top-space = get-length td#top-space in
+        let len = get-length td#block-length in
         (top-space,paper-height -' len -' top-space)
       | TopBottom(tbd)->
-        let top-space = JLReqFont.to-length tbd#top-space in
-        let bottom-space = JLReqFont.to-length tbd#bottom-space in
+        let top-space = get-length tbd#top-space in
+        let bottom-space = get-length tbd#bottom-space in
         (top-space,bottom-space)
     in
     let get-left-margin pagenum =
@@ -456,7 +442,7 @@ end = struct
         (!ref-float-boxes) |> List.fold-left (fun (h,n) (pn, bb) -> (
           if pn > pbinfo#page-number then (h,n)
           else
-            let hh = h +' (get-natural-length bb) +' (JLReqFont.to-length float-margin) in
+            let hh = h +' (get-natural-length bb) +' (float-margin config#font-size) in
             if hh <' max-float-height || n == 0 then (hh,n + 1)
             else (h,n)
         )) (0pt,0)
@@ -470,8 +456,8 @@ end = struct
         text-height = paper-height -' top-space -' bottom-space -' hofb;
       |)
     in
-    let head-height = JLReqFont.to-length config#header-height in
-    let head-sep = JLReqFont.to-length config#header-sep in
+    let head-height = get-length config#header-height in
+    let head-sep = get-length config#header-sep in
     let () = ref-kihonhanmen <- (|
     |) in
     let pagestyle pbinfo = 
@@ -493,7 +479,7 @@ end = struct
         List.fold-right (fun (page,box) (o,r,n) -> (
           if (n >= number-of-float-boxes || page > pbinfo#page-number) then (o,(page,box) :: r,n)
           else
-            let b = line-break true true (set-paragraph-margin 0pt (JLReqFont.to-length float-margin) ctx)
+            let b = line-break true true (set-paragraph-margin 0pt (float-margin config#font-size) ctx)
               (inline-fil ++ (embed-block-top ctx text-width (fun _ -> box) ++ inline-fil))
             in
             (o +++ b,r,n + 1)
@@ -512,9 +498,9 @@ end = struct
       |> set-leading (config#font-size +' config#line-gap)
       |> set-paragraph-margin config#line-gap config#line-gap
     in
-    let main-block = read-block ctx-doc inner in
+    let main-block = read-block ctx-doc '<+font-style [font-set config#font; font-size config#font-size] <#inner;>> in
     let title-b = 
-      if record#show-title then formats#maketitle ctx-doc record#title record#author record#date
+      if record#show-title then read-block ctx-doc '<+font-style [font-set config#font;font-size config#font-size] <+maketitle (formats#maketitle) (record#title) (record#author) (record#date);>>
       else block-nil
     in
     let frontmatter-b =
@@ -524,7 +510,7 @@ end = struct
     in
     let toc-b = 
       if record#show-toc then 
-        formats#table-of-contents ctx-doc (JLReqTOC.table-of-contents ctx-doc [])
+        read-block ctx-doc '<+font-style [font-set config#font;font-size config#font-size] <+toc (JLReqTOC.table-of-contents) (formats#table-of-contents);>>
       else
         block-nil
     in

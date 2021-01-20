@@ -1,7 +1,8 @@
+@require: list
+@require: fss/fss
+@require: fss/style
 @import: base
 @import: lib
-@import: font
-@require: list
 @import: pagenum
 
 module JLReqTOC : sig
@@ -28,8 +29,9 @@ end = struct
   
   % デフォルトの目次出力．
   let default-formatter ctx minlevel level txt page =
+  	let font-size = get-font-size ctx in
     line-break true true ctx (
-      inline-skip (JLReqFont.font-size *' (float (level - minlevel))) ++ 
+      inline-skip (font-size *' (float (level - minlevel))) ++ 
       (read-inline ctx txt) ++ 
       inline-fil ++ 
       (read-inline ctx (embed-string page))

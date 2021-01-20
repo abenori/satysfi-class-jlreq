@@ -1,7 +1,9 @@
 @require: list
 @require: option
+@require: fss/fss
+@require: fss/style
 @import: base
-@import: font
+@import: lib
 @import: mark
 @import: toc
 @import: pagenum
@@ -14,22 +16,22 @@ type block-heading-gyodori =
   | AfterLength of float * length
   | Absolute of length * length
 
-type block-heading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * jlreq-length
+type block-heading-subtitle-indent = SubTitleNoBreak | SubTitleIndent of bool * (length -> (string -> length option) -> length)
 
 type jlreq-block-heading-config = (|
   level : int;
-  font : nfss;
-  label-font : nfss;
-  subtitle-font : nfss;
+  font : style list;
+  label-font : style list;
+  subtitle-font : style list;
   gyodori : block-heading-gyodori;
   label-format : int -> string;
   reference-label-format : int -> string;
   subtitle-format : inline-text -> inline-text;
-  indent : jlreq-length;
-  end-indent : jlreq-length;
-  after-label-space : jlreq-length;
+  indent : length -> (string -> length option) -> length;
+  end-indent : length -> (string -> length option) -> length;
+  after-label-space : length -> (string -> length option) -> length;
   % ラベル頭起点にするならば一つ目をtrueにする．
-  second-heading-text-indent : bool * jlreq-length;
+  second-heading-text-indent : bool * (length -> (string -> length option) -> length);
   subtitle-indent : block-heading-subtitle-indent;
   reset-counters : (int ref) list;
   clear-mark-levels : int list;
@@ -39,10 +41,10 @@ type jlreq-block-heading-config = (|
 
 type jlreq-run-in-heading-config = (|
   level : int;
-  font : nfss;
-  indent : jlreq-length;
-  after-label-space : jlreq-length;
-  after-space : jlreq-length;
+  font : style list;
+  indent : length -> (string -> length option) -> length;
+  after-label-space : length -> (string -> length option) -> length;
+  after-space : length -> (string -> length option) -> length;
   label-format : int -> string;
   reference-label-format : int -> string;
   mark-format : inline-text -> inline-text -> inline-text;
@@ -58,13 +60,13 @@ module JLReqHeading : sig
   val block-heading-scheme-nocounter : 'a -> context -> inline-text ?-> inline-text ?-> inline-text -> block-text -> block-boxes
     constraint 'a :: (|
       level : int;
-      font : nfss;
-      subtitle-font : nfss;
+      font : style list;
+      subtitle-font : style list;
       gyodori : block-heading-gyodori;
       subtitle-format : inline-text -> inline-text;
-      indent : jlreq-length;
-      end-indent : jlreq-length;
-      second-heading-text-indent : jlreq-length;
+      indent : (length -> (string -> length option) -> length);
+      end-indent : length -> (string -> length option) -> length;
+      second-heading-text-indent : (length -> (string -> length option) -> length);
       subtitle-indent : block-heading-subtitle-indent;
       clear-mark-levels : int list;
       mark-format : inline-text -> inline-text;
@@ -75,37 +77,41 @@ module JLReqHeading : sig
   val default-config-run-in-heading : jlreq-run-in-heading-config
 
 end = struct
-  let-inline ctx \hspace len = inline-skip (JLReqFont.to-length len) 
+  let-inline ctx \hspace len = inline-skip (JLReqLib.get-length ctx len)
+  let get-zw-length ratio l f =
+    match (f `ja`) with
+    | None -> l *' ratio
+    | Some(ll) -> ll *' ratio
 
   let default-config-block-heading = (|
     level = 0;
-    font = Current;
-    label-font = Current;
-    subtitle-font = Current;
+    font = [];
+    label-font = [];
+    subtitle-font = [];
     gyodori = GyodoriCenter(2.0);
     label-format = arabic;
     reference-label-format = arabic;
     subtitle-format = (fun s -> {—#s;—});
-    indent = Length(0pt);
-    end-indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    second-heading-text-indent = (false,ZW(1.0));
-    subtitle-indent = SubTitleIndent(false,ZW(1.0));
+    indent = (fun _ _ -> 0pt);
+    end-indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    second-heading-text-indent = (false,(get-zw-length 1.0));
+    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
     reset-counters = [];
     clear-mark-levels = [];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     add-to-toc = true;
   |)
 
   let default-config-run-in-heading = (|
     level = 0;
-    font = Roman(ZW(1.0));
-    indent = Length(0pt);
-    after-label-space = ZW(1.0);
-    after-space = ZW(1.0);
+    font = [];
+    indent = (fun _ _ -> 0pt);
+    after-label-space = (get-zw-length 1.0);
+    after-space = (get-zw-length 1.0);
     label-format = arabic;
     reference-label-format = arabic;
-    mark-format = (fun cnt txt -> {#cnt;\hspace(ZW(1.0));#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
     clear-mark-levels = [];
     reset-counters = [];
     add-to-toc = true;
@@ -114,15 +120,12 @@ end = struct
 
   %. 別行見出し
   let block-heading-scheme config counter ctx ?:label ?:runninghead ?:subtitle heading block =
-    let font-size = JLReqFont.font-size in
-    let line-gap = JLReqFont.line-gap in
-    let to-length l = match l with 
-      | ZW(n) -> font-size *' n
-      | Length(ll) -> ll
+    let font-size = get-font-size ctx in
+    let mult-font-size lang =
+      let (w,_,_) = get-natural-metrics (read-inline ctx {阿}) in
+      if (String.equal lang `ja`) then Some(w) else None
     in
-    let ctxheading = ctx
-      |> JLReqFont.select-font config#font
-    in
+    let get-length f = f font-size mult-font-size in
     let () = counter <- !counter + 1 in
     let _ = List.map (fun cnt -> (cnt <- 0)) config#reset-counters in
     let hookbox = 
@@ -149,14 +152,16 @@ end = struct
         inline-nil
     in
     let label-box = register-mark-box ++ toc-box ++
-      hookbox ++ (read-inline (JLReqFont.select-font config#label-font ctxheading) i-label) in
+      hookbox ++
+      (read-inline ctx {\font-style (config#label-font) {\font-style (config#font) {#i-label;}}})
+    in
     let (label-length,_,_) = get-natural-metrics label-box in
     let heading-text-indent = 
       let (fromlabel,len) = config#second-heading-text-indent in
       if fromlabel then
-        to-length len
+        get-length len
       else
-        label-length +' (to-length config#after-label-space) +' (to-length len)
+        label-length +' (get-length config#after-label-space) +' (get-length len)
     in
     let get-pads indent end-indent = (indent, end-indent, 0pt, 0pt) in
     let decos =
@@ -164,10 +169,10 @@ end = struct
       (deco, deco, deco, deco)
     in
     let label-heading-box = 
-      (inline-skip (0pt -' heading-text-indent)) ++ label-box ++ (inline-skip (to-length config#after-label-space)) ++ (read-inline ctxheading heading)
+      (inline-skip (0pt -' heading-text-indent)) ++ label-box ++ (inline-skip (get-length config#after-label-space)) ++ 
+      (read-inline ctx {\font-style (config#font) {#heading;}})
     in
     let output c =
-      let ctxa = set-paragraph-margin line-gap line-gap c in
       let (first-boxes,second-boxes) = % inline-box, block-box
         match subtitle with
         | None -> (label-heading-box,block-nil)
@@ -175,25 +180,29 @@ end = struct
           let subtitle-txt = config#subtitle-format subt in
           match config#subtitle-indent with
           | SubTitleNoBreak ->
-            (label-heading-box ++ (read-inline (JLReqFont.select-font config#subtitle-font ctxa) subtitle-txt),block-nil)
+            (label-heading-box ++ (read-inline c {\font-style (config#subtitle-font) {#subtitle-txt;}}),block-nil)
           | SubTitleIndent(fromlabel,l) ->
-            let len = to-length l in
+            let len = get-length l in
             let outputsubtitle cc =
-              line-break false false (JLReqFont.select-font config#subtitle-font cc) ((read-inline (JLReqFont.select-font config#subtitle-font cc) subtitle-txt) ++ inline-fil)
+              line-break false false cc ((read-inline cc {\font-style (config#subtitle-font) {#subtitle-txt;}}) ++ inline-fil)
             in
-            let subtitle-indent = if fromlabel then len else len +' label-length +' (to-length config#after-label-space) in
-            (label-heading-box, block-frame-breakable ctxa (get-pads subtitle-indent 0pt) decos outputsubtitle)
+            let subtitle-indent = if fromlabel then len else len +' label-length +' (get-length config#after-label-space) in
+            (label-heading-box, block-frame-breakable c (get-pads subtitle-indent 0pt) decos outputsubtitle)
       in
       let outputheading cc =
         line-break false false cc (first-boxes ++ inline-fil)
       in
       (
-        block-frame-breakable ctxa (get-pads heading-text-indent 0pt) decos outputheading
+        block-frame-breakable c (get-pads heading-text-indent 0pt) decos outputheading
       ) +++ second-boxes
     in
-    let heading-blockbox = block-frame-breakable (set-paragraph-margin 0pt 0pt ctxheading) (get-pads (to-length config#indent) (to-length config#end-indent)) decos output in
+    let heading-blockbox = block-frame-breakable (set-paragraph-margin 0pt 0pt ctx) (get-pads (get-length config#indent) (get-length config#end-indent)) decos output in
     let (before-space,after-space) = 
-      let baselineskip = font-size +' line-gap in
+      let baselineskip = JLReqLib.get-leading ctx in
+      let line-gap = 
+        let (_,h,d) = get-natural-metrics (read-inline ctx {阿}) in
+        baselineskip -' (h +' d)
+      in
       match config#gyodori with
       | GyodoriCenter(l) ->
         let len = (baselineskip *' l +' line-gap -' (get-natural-length heading-blockbox)) *' 0.5 in
@@ -229,14 +238,14 @@ end = struct
   let block-heading-scheme-nocounter config ctx =
     block-heading-scheme (|
       font = config#font;
-      label-font = Roman(ZW(1.0));
+      label-font = [];
       subtitle-font = config#subtitle-font;
       gyodori = config#gyodori;
       label-format = (fun _ -> ` `);
       subtitle-format = config#subtitle-format;
       indent = config#indent;
       end-indent = config#end-indent;
-      after-label-space = Length(0pt);
+      after-label-space = (fun _ _ -> 0pt);
       second-heading-text-indent = (false,config#second-heading-text-indent);
       subtitle-indent = config#subtitle-indent;
       reset-counters = [];
@@ -267,12 +276,6 @@ end = struct
        (JLReqMark.set-mark config#level (config#mark-format i-label markhead))
        config#clear-mark-levels
     in
-    let font-size = get-font-size ctx in
-    let to-length len =
-      match len with
-      |ZW(n) -> font-size *' n
-      |Length(l) -> l
-    in
     let toc-box = 
       if config#add-to-toc then
         JLReqTOC.add-contents-line config#level {#i-label;\hspace(config#after-label-space);#heading;}
@@ -280,11 +283,11 @@ end = struct
         inline-nil
     in
     line-break true true ctx (
-      register-ref-box ++ mark-box ++ toc-box ++ (inline-skip (to-length config#indent)) ++ 
-      (read-inline (JLReqFont.select-font config#font ctx) i-label) ++
-      (inline-skip (to-length config#after-label-space)) ++
-      (read-inline (JLReqFont.select-font config#font ctx) heading) ++
-      (inline-skip (to-length config#after-space)) ++
+      register-ref-box ++ mark-box ++ toc-box ++ (inline-skip (JLReqLib.get-length ctx config#indent)) ++ 
+      (read-inline ctx {\font-style (config#font) {#i-label;}}) ++
+      (inline-skip (JLReqLib.get-length ctx config#after-label-space)) ++
+      (read-inline ctx {\font-style (config#font) {#heading;}}) ++
+      (inline-skip (JLReqLib.get-length ctx config#after-space)) ++
       (read-inline ctx inner) ++ inline-fil
     )
 

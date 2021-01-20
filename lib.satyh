@@ -1,8 +1,15 @@
 @require: base/length
+@require: base/string
+@require: fss/fss
+@require: fss/style
 
 module JLReqLib : sig
   val string-to-int : string -> int option
   val set-margin : context -> bool -> bool -> length -> length -> block-boxes -> block-boxes
+  val get-fss-font-size : context -> style list -> length
+  val get-leading : context -> length
+  val get-paragraph-margin : context -> (length * length)
+  val get-length : context -> (length -> (string -> length option) -> length) -> length
 end = struct
   let-rec string-to-int s =
     let len = string-length s in
@@ -43,6 +50,53 @@ end = struct
     (block-skip (0pt -' (large-skip *' 2.0) -' dummy-len)) +++
     (line-break false after-breakable (set-paragraph-margin large-skip after-margin ctx) (inline-bb ++ inline-fil))
 
+  let-mutable jlreq-tmp-length <- 0pt
+  let-inline ctx \save-font-size =
+    let () = jlreq-tmp-length <- (get-font-size ctx) in
+    inline-nil
+  let get-fss-font-size ctx style =
+    let it = read-inline ctx {\font-style (style) {\save-font-size;}} in
+    !jlreq-tmp-length
+  let get-paragraph-margin ctx =
+    let inline-bb = inline-graphics 10pt 10pt 10pt (fun pt -> []) in
+    let dummy-txt-a = line-break false false ctx (inline-bb ++ inline-fil) in
+    let dummy-txt-b = line-break false false (set-paragraph-margin 0pt 0pt ctx) (inline-bb ++ inline-fil) in
+    let above = (get-natural-length (dummy-txt-b +++ dummy-txt-a)) -' 40pt in
+    let below = (get-natural-length (dummy-txt-a +++ dummy-txt-b)) -' 40pt in
+    (above,below)
+
+  let get-leading ctx =
+    let tw = get-text-width ctx in
+    let font-size = get-font-size ctx in
+    let numchar = Float.to-int((tw *' 1.5) /' font-size) in
+    let-rec aux n = 
+      if n == 0 then ` `
+      else (aux (n - 1)) ^ `阿`
+    in
+    let s = aux numchar in
+    let-rec get-bb str =
+      let bb = read-inline ctx (embed-string str) in
+      let (w,_,_) = get-natural-metrics bb in
+      if Length.(w > tw *' 1.1) && Length.(w < tw *' 1.9) then
+       (bb,1)
+      else if Length.(w > tw *' 2.0) then
+        let n = Float.to-int(w /' tw) in
+        (bb,n)
+      else get-bb (str ^ `阿`) 
+    in
+    let (bb,n) = get-bb s in
+    let (_,h,d) = get-natural-metrics bb in
+    let len = get-natural-length (line-break true true (set-paragraph-margin 0pt 0pt ctx) (bb ++ inline-fil)) in
+    len -' ((h +' d) *' (Float.of-int n))
+
+  let get-length ctx f =
+    let font-size = get-font-size ctx in
+    let ib = read-inline ctx {阿} in
+    let (w,_,_) = get-natural-metrics ib in
+    let ml-font-size lang = 
+      if (String.equal lang `ja`) then Some(w) else None
+    in
+    f font-size ml-font-size
 
 end
 

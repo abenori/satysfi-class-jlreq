@@ -6,7 +6,6 @@
   (sources
     ((package "jlreq.satyh" "./jlreq.satyh")
      (package "base.satyh" "./base.satyh")
-     (package "font.satyh" "./font.satyh")
      (package "footnote.satyh" "./footnote.satyh")
      (package "heading.satyh" "./heading.satyh")
      (package "lib.satyh" "./lib.satyh")

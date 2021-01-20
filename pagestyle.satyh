@@ -1,6 +1,7 @@
 @require: list
+@require: fss/fss
+@require: fss/style
 @import: base
-@import: font
 @import: mark
 
 type page-style = (|
@@ -36,11 +37,11 @@ module JLReqPageStyle : sig
     nombre : ((|
       position : page-style-position;
       nombre : (page-info -> string -> inline-text);
-      font : nfss;
+      font : style list;
     |)) list;
     running-head : ((|
       position : page-style-position;
-      font : nfss;
+      font : style list;
       odd : page-style-running-head;
       even : page-style-running-head;
     |)) list;
@@ -82,12 +83,13 @@ end = struct
   
   
   let get-text-list lst ctx pbinfo pagestr =
-    let font-size = JLReqFont.font-size in
+    let font-size = get-font-size ctx in
     let-rec out needs-skip lst ctx pbinfo pagestr =
       match lst with
       | x :: xs -> (
         let (font,format) = x in
-        let ib = read-inline (JLReqFont.select-font font ctx) (format pbinfo pagestr) in
+        let it = (format pbinfo pagestr) in
+        let ib = read-inline ctx {\font-style (font) {#it;}} in
         let (len,_,_) = get-natural-metrics ib in
         if len >' 0pt then
           if needs-skip then
@@ -109,8 +111,8 @@ end = struct
     let lstb = get-text-list (List.reverse lst) ctx pbinfo pagestr in
     List.fold-left (++) inline-nil (List.reverse lstb)
   
-  let concat-nombre-runhead left right =
-    let font-size = JLReqFont.font-size in
+  let concat-nombre-runhead ctx left right =
+    let font-size = get-font-size ctx in
     let (left-len,_,_) = get-natural-metrics left in
     let (right-len,_,_) = get-natural-metrics right in
     if left-len >' 0pt && right-len >' 0pt then
@@ -180,15 +182,15 @@ end = struct
     let odd-header ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left odd-top-left#runhead ctx pbinfo pagestr)
             (output-left odd-top-left#nombre ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead 
+          concat-nombre-runhead ctx
             (output-left odd-top-center#runhead ctx pbinfo pagestr)
             (output-left odd-top-center#nombre ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-right odd-top-right#runhead ctx pbinfo pagestr)
             (output-right odd-top-right#nombre ctx pbinfo pagestr)
         )
@@ -197,15 +199,15 @@ end = struct
     let odd-footer ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left odd-bottom-left#runhead ctx pbinfo pagestr)
             (output-left odd-bottom-left#nombre ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left odd-bottom-center#runhead ctx pbinfo pagestr)
             (output-left odd-bottom-center#nombre ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-right odd-bottom-right#runhead ctx pbinfo pagestr)
             (output-right odd-bottom-right#nombre ctx pbinfo pagestr)
         )
@@ -214,15 +216,15 @@ end = struct
     let even-header ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left even-top-left#nombre ctx pbinfo pagestr)
             (output-left even-top-left#runhead ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left even-top-center#nombre ctx pbinfo pagestr)
             (output-left even-top-center#runhead ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-right even-top-right#nombre ctx pbinfo pagestr)
             (output-right even-top-right#runhead ctx pbinfo pagestr)
         )
@@ -231,15 +233,15 @@ end = struct
     let even-footer ctx pbinfo pagestr =
       line-break false false ctx (
         make-headfoot (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left even-bottom-left#nombre ctx pbinfo pagestr)
             (output-left even-bottom-left#runhead ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-left even-bottom-center#nombre ctx pbinfo pagestr)
             (output-left even-bottom-center#runhead ctx pbinfo pagestr)
         ) (
-          concat-nombre-runhead
+          concat-nombre-runhead ctx
             (output-right even-bottom-right#nombre ctx pbinfo pagestr)
             (output-right even-bottom-right#runhead ctx pbinfo pagestr)
         )
@@ -256,7 +258,7 @@ end = struct
     nombre = [(|
       position = PageStyleBottomCenter;
       nombre = (fun _ pagestr -> embed-string (pagestr));
-      font = Roman(ZW(0.8));
+      font = [with-font-size (fun l -> l *' 0.8)];
     |);];
     running-head = [];
   |)

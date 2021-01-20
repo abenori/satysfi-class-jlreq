@@ -1,16 +1,17 @@
+@require: fss/fss
+@require: fss/style
 @import: base
-@import: font
 @import: pagenum
 @import: paragraph
 @import: lib
 
 type jlreq-theorem-config = (|
-  before-space : jlreq-length;
-  after-space : jlreq-length;
-  font : nfss;
-  heading-font : nfss;
+  before-space : (length -> (string -> length option) -> length);
+  after-space : (length -> (string -> length option) -> length);
+  font : style list;
+  heading-font : style list;
   label-format : int -> string;
-  after-label-space : jlreq-length;
+  after-label-space : (length -> (string -> length option) -> length);
 |)
 
 module JLReqTheorem : sig
@@ -18,19 +19,29 @@ module JLReqTheorem : sig
   val default-config-theorem : jlreq-theorem-config
 
 end = struct
+  let get-zw-length ratio l ml =
+    match (ml `ja`) with
+    | None -> l *' ratio
+    | Some(ll) -> ll *' ratio
+
   let default-config-theorem = (|
-    before-space = ZW(1.7);
-    after-space = ZW(1.7);
-    font = Roman(ZW(1.0));
-    heading-font = Sans(ZW(1.0));
+    before-space = (get-zw-length 1.7);
+    after-space = (get-zw-length 1.7);
+    font = [];
+    heading-font = [bold];
     label-format = arabic;
-    after-label-space = ZW(1.0);
+    after-label-space = (get-zw-length 1.0);
   |)
 
   %. 定理環境
   let theorem-scheme config theorem-name counter ctx ?:label ?:heading inner =
-    let font-size = JLReqFont.font-size in
-    let line-gap = JLReqFont.line-gap in
+    let font-size = get-font-size ctx in
+    let (ja-font-size,_,_) = get-natural-metrics (read-inline ctx {阿}) in
+    let ml-font-size lang =
+      if (String.equal lang `ja`) then Some(ja-font-size)
+      else None
+    in
+    let get-length f = f font-size ml-font-size in
     let () = counter <- !counter + 1 in
     let hookbox = 
       match label with
@@ -42,22 +53,23 @@ end = struct
         in
         hook-page-break hookfunc
     in
-    let heading-ctx = JLReqFont.select-font config#heading-font ctx in
+%    let heading-ctx = JLReqFont.select-font config#heading-font ctx in
     let subtitle-box = match heading with
       | None -> inline-nil
-      | Some(s) -> (inline-skip (JLReqFont.to-length (ZW(0.5)))) ++ (read-inline heading-ctx {(#s;)})
+      | Some(s) -> (inline-skip (font-size *' 0.5) ++ (read-inline ctx {\font-style (config#heading-font) {(#s;)}}))
     in
+    let cnt-it = embed-string (config#label-format !counter) in
     let heading-box = 
       hookbox ++ 
-      (read-inline heading-ctx theorem-name) ++
-      (read-inline heading-ctx (embed-string (config#label-format !counter))) ++
+      (read-inline ctx {\font-style (config#heading-font) {#theorem-name;}}) ++
+      (read-inline ctx {\font-style (config#heading-font) {#cnt-it;}}) ++
       subtitle-box ++
-      inline-skip (JLReqFont.to-length config#after-label-space)
+      inline-skip (get-length config#after-label-space)
     in
     let () = JLReqParagraph.set-paragraph-top-text heading-box in
     let decos =
       let deco _ _ _ _ = [] in
       (deco, deco, deco, deco)
     in
-    JLReqLib.set-margin ctx true true (JLReqFont.to-length config#before-space) (JLReqFont.to-length config#after-space) (read-block ctx inner)
+    JLReqLib.set-margin ctx true true (get-length config#before-space) (get-length config#after-space) (read-block ctx inner)
 end

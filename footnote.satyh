@@ -1,16 +1,18 @@
 @import: base
-@import: font
+@import: lib
+@require: fss/fss
+@require: fss/style
 
 type reference-mark-type = Interlinear | Inline
 
 type jlreq-footnote-config = (|
   reference-mark-type : reference-mark-type;
   reference-mark-format : int -> string;
-  reference-mark-font : nfss;
-  font : nfss;
-  line-gap : jlreq-length;
-  indent : jlreq-length;
-  second-indent : jlreq-length;
+  reference-mark-font : style list;
+  font : style list;
+  line-gap : (length -> (string -> length option) -> length);
+  indent : (length -> (string -> length option) -> length);
+  second-indent : (length -> (string -> length option) -> length);
 |)
 
 module JLReqFootnote : sig
@@ -21,7 +23,9 @@ end = struct
   let-mutable ref-footnote-exists-pages <- []
   let-mutable ref-footnote-label-numer <- 0
   let footnote-get-reference-mark-box ctx mark-type font format num =
-    let mark-box = read-inline (JLReqFont.select-font font ctx) (embed-string (format num)) in
+    let mark-ita = embed-string (format num) in
+    let mark-itb = {\font-style (font) {#mark-ita;}} in
+    let mark-box = read-inline ctx mark-itb  in
     let (length,height,depth) = get-natural-metrics mark-box in
     let font-size = get-font-size ctx in
     match mark-type with
@@ -72,11 +76,17 @@ end = struct
     |_ -> block-skip line-gap
   
   let footnote-scheme config counter ctx txt =
+    let font-size = get-font-size ctx in
+    let (ja-font-size,_,_) = get-natural-metrics (read-inline ctx {阿}) in
+    let ml-font-size lang =
+      if (String.equal lang `ja`) then Some(ja-font-size)
+      else None
+    in
+    let get-length f = f font-size ml-font-size in
     let () = counter <- !counter + 1 in
     let () = ref-footnote-label-numer <- !ref-footnote-label-numer + 1 in
     let inner-label = ((arabic !ref-footnote-label-numer) ^ `:footnote-label`) in
-    let font-size = JLReqFont.font-size in
-    let line-gap = JLReqFont.line-gap in
+    let font-size = get-font-size ctx in
     let reference-mark-box = 
       footnote-get-reference-mark-box ctx
         config#reference-mark-type
@@ -84,24 +94,15 @@ end = struct
         config#reference-mark-format
         !counter
     in
-    let footnote-line-gap =
-      match config#line-gap with
-      |ZW(n) -> line-gap *' n
-      |Length(l) -> l
-    in
-    let footnote-font-size = get-font-size (JLReqFont.select-font config#font ctx) in
+    let footnote-line-gap = get-length config#line-gap in
+    let footnote-font-size = JLReqLib.get-fss-font-size ctx config#font in
     let footnote-box-line = footnote-line-box ctx inner-label footnote-font-size footnote-line-gap in
-    let to-length ncl =
-      match ncl with
-      | ZW(n) -> font-size *' n
-      | Length(l) -> l
-    in
     let footnote-box-main = 
-      let indent-c = (to-length config#indent) in
+      let indent-c = (get-length config#indent) in
       let text-width = (get-text-width ctx) in
       let number-of-chars = round ((text-width -' indent-c) /' font-size) in
       let indent = text-width -' font-size *' (float number-of-chars) in
-      let second-indent = (to-length config#second-indent) in
+      let second-indent = (get-length config#second-indent) in
       let pads = (indent +' second-indent, 0pt, 0pt, 0pt) in
       let decos =
         let deco _ _ _ _ = [] in
@@ -109,10 +110,10 @@ end = struct
       in
       let output c =
         let cc = c
-          |> JLReqFont.select-font config#font
           |> set-leading (footnote-line-gap +' footnote-font-size)
         in
-        let rmb = read-inline cc (embed-string (config#reference-mark-format !counter)) in
+        let ita = embed-string (config#reference-mark-format !counter) in
+        let rmb = read-inline cc {\font-style (config#font) {#ita;}} in
         let (len,_,_) = get-natural-metrics rmb in
         let body = read-inline cc txt in
         line-break false false cc
