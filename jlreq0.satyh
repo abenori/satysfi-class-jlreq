@@ -1,0 +1,84 @@
+@stage: 0
+@require: base/parser
+
+let jlreq-length (pos,str) =
+  open Parser in
+  open StringParser in
+  let (<**>) p1 p2 =
+    p1 >>= (fun a -> p2 >>= (fun b -> pure (a,b)))
+  in
+
+  let digit-parser =
+    let aux s i = (string s) >>= (fun _ -> pure i) in
+    aux `0` 0.0 <|> aux `1` 1.0 <|> aux `2` 2.0 <|>
+    aux `3` 3.0 <|> aux `4` 4.0 <|> aux `5` 5.0 <|>
+    aux `6` 6.0 <|> aux `7` 7.0 <|> aux `8` 8.0 <|>
+    aux `9` 9.0
+  in
+  
+  let digits-parser-u =
+    (some digit-parser) >>= (fun s -> pure (List.fold-left (fun a b -> 10.0 *. a +. b) 0.0 s))
+  in
+  
+  let digits-parser-l =
+    (some digit-parser) >>= (fun s -> pure (0.1 *. (List.fold-right (fun a b -> a +. (0.1 *. b)) 0.0 s)))
+  in
+  
+  let float-parser =
+    (try (((digits-parser-u << string `.`) <**> digits-parser-l) >>= (fun (a,b) -> (pure (lift-float (a +. b)))))) <|>
+    (digits-parser-u >>= (fun a -> pure (lift-float a)))
+  in
+  
+  let length-parser =
+    (try ((float-parser << (string `pt`)) >>= (fun l -> (pure (fun _ _ -> &(1pt *' ~l)))))) <|>
+    (try ((float-parser << (string `em`))) >>= (fun l -> (pure (fun len _ -> &(~len *' ~l))))) <|>
+    ((float-parser << (string `zw`)) >>= (fun l -> (pure (fun len lang-len -> (
+      &((match ~lang-len `ja` with 
+          |None -> ~len
+          |Some(ll) -> ll
+        ) *' ~l)
+    )))))
+  in
+  
+  let string-with-spaces s = spaces >> (string s) << spaces in
+
+  let length-t-parser =
+    (try (
+      ((float-parser << (string-with-spaces `*`)) <**> length-parser) >>= 
+        (fun (a,b) -> (pure (fun x y -> &(~(b x y) *' ~a))))
+    )) <|> length-parser
+  in
+  
+  let term-parser =
+    spaces >> (
+      (
+        (
+          (try ((string-with-spaces `-`) >> length-t-parser >>= (fun l -> pure (fun x y -> (
+            &(0pt -' ~(l x y))
+          ))))) <|>
+          (length-t-parser >>= (fun l -> pure (fun x y -> &(~(l x y)))))
+        )
+        <**>
+        (
+          (many (
+            (try (((string-with-spaces `-`) >> length-t-parser) >>= (fun l -> pure (fun x y -> &(0pt -' ~(l x y)))))) <|>
+            (try ((string-with-spaces `+`) >> length-t-parser))
+          )) >>= (fun v -> (pure (
+            List.fold-left (fun a b -> (fun x y -> &(~(a x y) +' ~(b x y)))) (fun _ _ -> &(0pt)) v
+          )))
+        )
+      ) >>= 
+      (fun (a,b) -> (pure (fun x y -> &(~(a x y) +' ~(b x y)))))
+    )
+    << (spaces >> eof)
+  in
+  
+  let (fname,line,_) = get-input-position pos in
+  match StringParser.run term-parser str with
+  | Err(_) ->  (
+    let () = abort-with-message (#`Syntax error in length expression, at line `# ^ (arabic line) ^ #` in `# ^ fname) in
+    &(fun _ _ -> 0pt)
+  )
+  | Ok(f) -> &(fun x y -> ~(f &x &y))
+
+
