@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "satysfi-class-jlreq"
-version: "0.0.1"
+version: "0.0.2"
 synopsis: "A document class for SATySFi"
 authors: "Noriyuki Abe"
 maintainer: "Noriyuki Abe"

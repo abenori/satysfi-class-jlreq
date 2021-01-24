@@ -2,10 +2,11 @@
 
 (library
   (name "class-jlreq")
-  (version "0.0.1")
+  (version "0.0.2")
   (sources
     ((package "jlreq.satyh" "./jlreq.satyh")
      (package "base.satyh" "./base.satyh")
+     (package "jlreq0.satyh" "./jlreq0.satyh")
      (package "footnote.satyh" "./footnote.satyh")
      (package "heading.satyh" "./heading.satyh")
      (package "lib.satyh" "./lib.satyh")

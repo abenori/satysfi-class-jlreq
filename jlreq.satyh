@@ -13,6 +13,7 @@
 @import: toc
 @import: theorem
 @import: paragraph
+@import: jlreq0
 
 type kihon-hanmen-horizontal = 
   | HorizontalAuto
@@ -238,8 +239,8 @@ end = struct
     label-format = (fun n -> (`第` ^ (arabic n) ^ `部`));
     reference-label-format = (fun n -> arabic n);
     subtitle-format = (fun s -> {—#s;—});
-    indent = (fun _ _ -> 0pt);
-    end-indent = (fun _ _ -> 0pt);
+    indent = ~(jlreq-length @`0pt`);
+    end-indent = ~(jlreq-length @`0pt`);
     after-label-space = (get-zw-length 1.0);
     second-heading-text-indent = (false,(get-zw-length 1.0));
     subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
@@ -258,13 +259,13 @@ end = struct
     label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     reference-label-format = (fun n -> (arabic !section-counter) ^ `.` ^ (arabic n));
     subtitle-format = (fun s -> {—#s;—});
-    indent = (fun _ _ -> 0pt);
-    end-indent = (fun _ _ -> 0pt);
-    after-label-space = (get-zw-length 1.0);
-    second-heading-text-indent = (false,(get-zw-length 1.0));
-    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
+    indent = ~(jlreq-length @`0pt`);
+    end-indent = ~(jlreq-length @`0pt`);
+    after-label-space = ~(jlreq-length @`1zw`);
+    second-heading-text-indent = (false,~(jlreq-length @`1zw`));
+    subtitle-indent = SubTitleIndent(false,~(jlreq-length @`1zw`));
     reset-counters = [paragraph-counter];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     clear-mark-levels = [];
     add-to-toc = true;
   |)
@@ -278,13 +279,13 @@ end = struct
     label-format = arabic;
     reference-label-format = arabic;
     subtitle-format = (fun s -> {—#s;—});
-    indent = (fun _ _ -> 0pt);
-    end-indent = (fun _ _ -> 0pt);
-    after-label-space = (get-zw-length 1.0);
-    second-heading-text-indent = (false,(get-zw-length 1.0));
-    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
+    indent = ~(jlreq-length @`0pt`);
+    end-indent = ~(jlreq-length @`0pt`);
+    after-label-space = ~(jlreq-length @`1zw`);
+    second-heading-text-indent = (false,~(jlreq-length @`1zw`));
+    subtitle-indent = SubTitleIndent(false,~(jlreq-length @`1zw`));
     reset-counters = [subsection-counter; paragraph-counter];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     clear-mark-levels = [default-config-subsection#level];
     add-to-toc = true;
   |)
@@ -292,12 +293,12 @@ end = struct
   let default-config-paragraph = (|
     level = 2;
     font = [bold];
-    indent = (fun _ _ -> 0pt);
-    after-label-space = (get-zw-length 1.0);
-    after-space = (get-zw-length 1.0);
+    indent = ~(jlreq-length @`0pt`);
+    after-label-space = ~(jlreq-length @`1zw`);
+    after-space = ~(jlreq-length @`1zw`);
     label-format = (fun cnt -> ((arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt)));
     reference-label-format = (fun cnt -> (arabic !section-counter) ^ `.` ^ (arabic !subsection-counter) ^ `.` ^ (arabic cnt));
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     clear-mark-levels = [];
     reset-counters = [];
     add-to-toc = true;
@@ -312,14 +313,14 @@ end = struct
     font = [with-font-size (fun l -> l *' 0.68)];
     line-gap = (get-zw-length 0.675);
     reference-mark-format = (fun n -> (arabic n) ^ `)`);
-    indent = (fun _ _ -> 0pt);
-    second-indent = (get-zw-length 1.0);
+    indent = ~(jlreq-length @`0pt`);
+    second-indent = ~(jlreq-length @`1zw`);
   |)
   let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote footnote-counter ctx
   
   %. 段落
-  let-block ctx +p it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = (get-zw-length 1.0);|) ctx it)
-  let-block ctx +pn it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = (fun _ _ -> 0pt);|) ctx it)
+  let-block ctx +p it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`1zw`);|) ctx it)
+  let-block ctx +pn it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`0pt`);|) ctx it)
   
   %. maketitle
   let maketitle ctx title author date =
