@@ -4,6 +4,7 @@
 @import: pagenum
 @import: paragraph
 @import: lib
+@import: jlreq0
 
 type jlreq-theorem-config = (|
   before-space : (length -> (string -> length option) -> length);
@@ -19,18 +20,13 @@ module JLReqTheorem : sig
   val default-config-theorem : jlreq-theorem-config
 
 end = struct
-  let get-zw-length ratio l ml =
-    match (ml `ja`) with
-    | None -> l *' ratio
-    | Some(ll) -> ll *' ratio
-
   let default-config-theorem = (|
-    before-space = (get-zw-length 1.7);
-    after-space = (get-zw-length 1.7);
+    before-space = ~(jlreq-length @`1.7zw`);
+    after-space = ~(jlreq-length @`1.7zw`);
     font = [];
     heading-font = [bold];
     label-format = arabic;
-    after-label-space = (get-zw-length 1.0);
+    after-label-space = ~(jlreq-length @`1zw`);
   |)
 
   %. 定理環境

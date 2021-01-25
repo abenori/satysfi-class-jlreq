@@ -116,22 +116,18 @@ module JLReq : sig
   val default-config-footnote : jlreq-footnote-config
   direct \figure : [string?; inline-text; block-text] inline-cmd
 end = struct
-  let get-zw-length ratio l f =
-    match (f `ja`) with
-    | None -> l *' ratio
-    | Some(ll) -> ll *' ratio
   let default-config-document = (|
     two-side = false;
     paper-size = A4Paper;
     horizontal-layout = HorizontalAuto;
     vertical-layout = VerticalAuto;
-    header-sep  = (get-zw-length 1.0);
-    header-height = (get-zw-length 1.0);
+    header-sep  = ~(jlreq-length @`1zw`);
+    header-height = ~(jlreq-length @`1zw`);
     font-size = 10pt;
     line-gap = 7pt;
     font = FssFonts.default-font-set;
     column = 1;
-    column-gap = (get-zw-length 2.0);
+    column-gap = ~(jlreq-length @`2zw`);
   |)
   
   let paper-size-to-width-height ps = 
@@ -216,7 +212,7 @@ end = struct
   let-inline ctx \figure = float-scheme (|
       caption-font = [bold];
       caption-label-font = [bold];
-      caption-after-label-space = (get-zw-length 1.0);
+      caption-after-label-space = ~(jlreq-length @`1zw`);
       caption-label-format = (fun n -> embed-string (arabic n));
     |) figure-counter ctx
 
@@ -241,11 +237,11 @@ end = struct
     subtitle-format = (fun s -> {—#s;—});
     indent = ~(jlreq-length @`0pt`);
     end-indent = ~(jlreq-length @`0pt`);
-    after-label-space = (get-zw-length 1.0);
-    second-heading-text-indent = (false,(get-zw-length 1.0));
-    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
+    after-label-space = ~(jlreq-length @`1zw`);
+    second-heading-text-indent = (false,~(jlreq-length @`1zw`));
+    subtitle-indent = SubTitleIndent(false,~(jlreq-length @`1zw`));
     reset-counters = [];    
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     clear-mark-levels = [];
     add-to-toc = true;
   |)
@@ -311,7 +307,7 @@ end = struct
     reference-mark-type = Inline;
     reference-mark-font = [with-font-size (fun l -> l *' 0.6)];
     font = [with-font-size (fun l -> l *' 0.68)];
-    line-gap = (get-zw-length 0.675);
+    line-gap = ~(jlreq-length @`0.675zw`);
     reference-mark-format = (fun n -> (arabic n) ^ `)`);
     indent = ~(jlreq-length @`0pt`);
     second-indent = ~(jlreq-length @`1zw`);

@@ -7,6 +7,7 @@
 @import: mark
 @import: toc
 @import: pagenum
+@import: jlreq0
 
 type block-heading-gyodori = 
   | GyodoriCenter of float
@@ -78,10 +79,6 @@ module JLReqHeading : sig
 
 end = struct
   let-inline ctx \hspace len = inline-skip (JLReqLib.get-length ctx len)
-  let get-zw-length ratio l f =
-    match (f `ja`) with
-    | None -> l *' ratio
-    | Some(ll) -> ll *' ratio
 
   let default-config-block-heading = (|
     level = 0;
@@ -92,26 +89,26 @@ end = struct
     label-format = arabic;
     reference-label-format = arabic;
     subtitle-format = (fun s -> {—#s;—});
-    indent = (fun _ _ -> 0pt);
-    end-indent = (fun _ _ -> 0pt);
-    after-label-space = (get-zw-length 1.0);
-    second-heading-text-indent = (false,(get-zw-length 1.0));
-    subtitle-indent = SubTitleIndent(false,(get-zw-length 1.0));
+    indent = ~(jlreq-length @`0pt`);
+    end-indent = ~(jlreq-length @`0pt`);
+    after-label-space = ~(jlreq-length @`1zw`);
+    second-heading-text-indent = (false,~(jlreq-length @`1zw`));
+    subtitle-indent = SubTitleIndent(false,~(jlreq-length @`1zw`));
     reset-counters = [];
     clear-mark-levels = [];
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     add-to-toc = true;
   |)
 
   let default-config-run-in-heading = (|
     level = 0;
     font = [];
-    indent = (fun _ _ -> 0pt);
-    after-label-space = (get-zw-length 1.0);
-    after-space = (get-zw-length 1.0);
+    indent = ~(jlreq-length @`0pt`);
+    after-label-space = ~(jlreq-length @`1zw`);
+    after-space = ~(jlreq-length @`1zw`);
     label-format = arabic;
     reference-label-format = arabic;
-    mark-format = (fun cnt txt -> {#cnt;\hspace(get-zw-length 1.0);#txt;});
+    mark-format = (fun cnt txt -> {#cnt;\hspace(~(jlreq-length @`1zw`));#txt;});
     clear-mark-levels = [];
     reset-counters = [];
     add-to-toc = true;
@@ -245,7 +242,7 @@ end = struct
       subtitle-format = config#subtitle-format;
       indent = config#indent;
       end-indent = config#end-indent;
-      after-label-space = (fun _ _ -> 0pt);
+      after-label-space = ~(jlreq-length @`0pt`);
       second-heading-text-indent = (false,config#second-heading-text-indent);
       subtitle-indent = config#subtitle-indent;
       reset-counters = [];
