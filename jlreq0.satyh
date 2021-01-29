@@ -4,10 +4,7 @@
 let jlreq-length (pos,str) =
   open Parser in
   open StringParser in
-  let (<**>) p1 p2 =
-    p1 >>= (fun a -> p2 >>= (fun b -> pure (a,b)))
-  in
-
+  let string-with-spaces s = try (spaces >> (string s) << spaces) in
   let digit-parser =
     let aux s i = (string s) >>= (fun _ -> pure i) in
     aux `0` 0.0 <|> aux `1` 1.0 <|> aux `2` 2.0 <|>
@@ -25,60 +22,94 @@ let jlreq-length (pos,str) =
   in
   
   let float-parser =
-    (try (((digits-parser-u << string `.`) <**> digits-parser-l) >>= (fun (a,b) -> (pure (lift-float (a +. b)))))) <|>
-    (digits-parser-u >>= (fun a -> pure (lift-float a)))
+    choice [
+      try (sequence [(digits-parser-u << string `.`); digits-parser-l] >>= (fun s -> pure (List.fold-left (+.) 0.0 s)));
+      try digits-parser-u;
+    ]
+  in
+
+  let float-eq-parser = fix (fun float-eq-parser -> (
+    let float-factor-parser = choice [
+      try float-parser;
+      try (between (string-with-spaces `(`) (string-with-spaces `)`) float-eq-parser);
+    ]
+    in
+
+    let float-term-parser = sequence [
+      float-factor-parser;
+      many (choice [
+        try ((string-with-spaces `*`) >> float-factor-parser);
+        try ((string-with-spaces `/`) >> float-factor-parser >>= (fun l -> pure (1.0 /. l)));
+      ]) >>= (fun s -> pure (List.fold-left (*.) 1.0 s));
+    ] >>= (fun s -> pure (List.fold-left (*.) 1.0 s))
+    in
+    
+    (sequence [
+      choice [
+        try ((string-with-spaces `-`) >> float-term-parser >>= (fun s -> pure (0.0 -. s)));
+        try float-term-parser;
+      ];
+      (many (choice [
+        try ((string-with-spaces `-`) >> float-term-parser >>= (fun s -> pure (0.0 -. s)));
+        try ((string-with-spaces `+`) >> float-term-parser);
+      ])) >>= (fun s -> pure (List.fold-left (+.) 0.0 s));
+    ] >>= (fun s -> pure (List.fold-left (+.) 0.0 s)))
+  ))
   in
   
-  let length-parser =
-    (try ((float-parser << (string `pt`)) >>= (fun l -> (pure (fun _ _ -> &(1pt *' ~l)))))) <|>
-    (try ((float-parser << (string `em`))) >>= (fun l -> (pure (fun len _ -> &(~len *' ~l))))) <|>
-    ((float-parser << (string `zw`)) >>= (fun l -> (pure (fun len lang-len -> (
-      &((match ~lang-len `ja` with 
-          |None -> ~len
-          |Some(ll) -> ll
-        ) *' ~l)
+  let length-parser = choice [
+    try ((float-parser << (string `pt`)) >>= (fun l -> pure (fun _ -> &(~(lift-length (1pt *'  l))))));
+    try ((float-parser << (string `em`)) >>= (fun l -> pure (fun (len,_) -> &(~len *' ~(lift-float l)))));
+    try ((float-parser << (string `zw`)) >>= (fun l -> pure (fun (len,lang-len) -> &(
+      match ~lang-len `ja` with
+      | None -> ~len *' ~(lift-float l)
+      | Some(ll) -> ll *' ~(lift-float l)
+    ))));
+  ]
+  in
+  
+  let length-calc a b c =
+    (a >>= (fun p -> (b >>= (fun q -> pure (
+      fun x -> &(~(q x) *' ~(lift-float p))
     )))))
+    >>= (fun q -> (c >>= (fun r -> pure (
+      fun x -> &(~(q x) *' ~(lift-float r))
+    ))))
   in
-  
-  let string-with-spaces s = spaces >> (string s) << spaces in
 
-  let length-t-parser =
-    (try (
-      ((float-parser << (string-with-spaces `*`)) <**> length-parser) >>= 
-        (fun (a,b) -> (pure (fun x y -> &(~(b x y) *' ~a))))
-    )) <|> length-parser
+  let length-eq-parser = fix (fun length-eq-parser -> (
+    let length-factor = choice [
+      try length-parser;
+      try (between (string-with-spaces `(`) (string-with-spaces `)`) length-eq-parser);
+    ] in
+    let float-term-parser = choice [
+      try (float-parser << (not-followed-by ((string `pt`) <|> (string `zw`) <|> (string `em`))));
+      try (between (string-with-spaces `(`) (string-with-spaces `)`) float-eq-parser);
+    ] in
+    let length-term-parser = length-calc
+      ((many (float-term-parser << (string-with-spaces `*`))) >>= (fun l -> pure (List.fold-left (*.) 1.0 l)))
+      length-factor
+      ((many (choice [
+        try (((string-with-spaces `/`) >> float-term-parser)) >>= (fun l -> pure (1.0 /. l));
+        try ((string-with-spaces `*`) >> float-term-parser);
+      ])) >>= (fun l -> pure (List.fold-left (*.) 1.0 l)))
+    in
+    sequence [
+      choice [
+        try ((string-with-spaces `-`) >> length-term-parser >>= (fun s -> pure (fun x -> &(0pt -' ~(s x)))));
+        length-term-parser;
+      ];
+      (many (choice [
+        try ((string-with-spaces `-`) >> length-term-parser >>= (fun s -> pure (fun x -> &(0pt -' ~(s x)))));
+        (string-with-spaces `+`) >> length-term-parser;
+      ])) >>= (fun s -> pure (fun x -> (List.fold-left (fun a b -> &(~a +' ~(b x))) &(0pt) s)));
+    ] >>= (fun s -> pure (fun x -> (List.fold-left (fun a b -> &(~a +' ~(b x))) &(0pt) s)))
+  ))
   in
-  
-  let term-parser =
-    spaces >> (
-      (
-        (
-          (try ((string-with-spaces `-`) >> length-t-parser >>= (fun l -> pure (fun x y -> (
-            &(0pt -' ~(l x y))
-          ))))) <|>
-          (length-t-parser >>= (fun l -> pure (fun x y -> &(~(l x y)))))
-        )
-        <**>
-        (
-          (many (
-            (try (((string-with-spaces `-`) >> length-t-parser) >>= (fun l -> pure (fun x y -> &(0pt -' ~(l x y)))))) <|>
-            (try ((string-with-spaces `+`) >> length-t-parser))
-          )) >>= (fun v -> (pure (
-            List.fold-left (fun a b -> (fun x y -> &(~(a x y) +' ~(b x y)))) (fun _ _ -> &(0pt)) v
-          )))
-        )
-      ) >>= 
-      (fun (a,b) -> (pure (fun x y -> &(~(a x y) +' ~(b x y)))))
-    )
-    << (spaces >> eof)
-  in
-  
+  let main = spaces >> length-eq-parser << (spaces >> eof) in
+
   let (fname,line,_) = get-input-position pos in
-  match StringParser.run term-parser str with
-  | Err(_) ->  (
-    let () = abort-with-message (#`Syntax error in length expression, at line `# ^ (arabic line) ^ #` in `# ^ fname) in
-    &(fun _ _ -> 0pt)
-  )
-  | Ok(f) -> &(fun x y -> ~(f &x &y))
-
+  match StringParser.run main str with
+  | Err(_) -> abort-with-message (#`Syntax error in length expression, at line `# ^ (arabic line) ^ #` in `# ^ fname)
+  | Ok(f) -> &(fun x y -> ~(f (&x,&y)))
 
