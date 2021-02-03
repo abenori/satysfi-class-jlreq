@@ -315,8 +315,14 @@ end = struct
   let-inline ctx \footnote = JLReqFootnote.footnote-scheme default-config-footnote footnote-counter ctx
   
   %. 段落
-  let-block ctx +p it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`1zw`);|) ctx it)
-  let-block ctx +pn it = line-break true true ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`0pt`);|) ctx it)
+  let-block ctx +p it = 
+    let ib = read-inline ctx it in
+    let (w,_,_) = get-natural-metrics ib in
+    line-break true (if Length.(w == 0pt) then false else true) ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`1zw`);|) ctx ib)
+  let-block ctx +pn it =
+    let ib = read-inline ctx it in
+    let (w,_,_) = get-natural-metrics ib in
+    line-break true (if Length.(w == 0pt) then false else true) ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`0pt`);|) ctx ib)
   
   %. maketitle
   let maketitle ctx title author date =
@@ -363,13 +369,6 @@ end = struct
   let document record ?:configopt ?:formatopt ?:frontmatter inner =
     let config = Option.from default-config-document configopt in
     let formats = Option.from default-format formatopt in
-    % check column
-    let () = 
-      if (config#column <> 1) && (config#column <> 2) then
-        abort-with-message `Only column = 1 or column = 2 is supported`
-      else
-        ()
-    in
     let get-standard-context width = 
       get-initial-context width (command \math) 
         |> set-dominant-wide-script Kana
@@ -511,11 +510,12 @@ end = struct
       else
         block-nil
     in
+    let-rec get-multicol-shifts n =
+      if n == 1 then []
+      else ((text-width +' column-gap) *' (Float.of-int(config#column - n + 1))) :: (get-multicol-shifts (n - 1))
+    in
     let doc = 
-      if config#column == 1 then
-        page-break config#paper-size page-layout pagestyle (title-b +++ frontmatter-b +++ toc-b +++ main-block)
-      else
-        page-break-two-column config#paper-size (text-width +' column-gap) (fun () -> block-nil) page-layout pagestyle (title-b +++ frontmatter-b +++ toc-b +++ main-block) 
+      page-break-multicolumn config#paper-size (get-multicol-shifts config#column) (fun () -> block-nil) (fun () -> block-nil) page-layout pagestyle (title-b +++ frontmatter-b +++ toc-b +++ main-block)
     in
     doc
 

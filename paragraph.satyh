@@ -7,7 +7,7 @@ module JLReqParagraph : sig
   val set-skip-last-fil : bool -> unit
   val get-paragraph-boxes : (|
     indent : (length -> (string -> length option) -> length);
-  |) -> context -> inline-text -> inline-boxes
+  |) -> context -> inline-boxes -> inline-boxes
 
 
 end = struct
@@ -22,14 +22,13 @@ let get-paragraph-top-text = !ref-paragraph-text
 let get-paragraph-boxes opt ctx txt =
 	let len = JLReqLib.get-length ctx opt#indent in
   let ib = !ref-paragraph-text in
-  let mainb = read-inline ctx txt in
   let () = ref-paragraph-text <- inline-nil in
   let skip-last = !ref-skip-last-fil in
   let () = ref-skip-last-fil <- false in
   let (w,_,_) = get-natural-metrics ib in
   (
     (if Length.(w == 0pt) then (inline-skip len) else inline-nil)
-    ++ ib ++ mainb
+    ++ ib ++ txt
     ++ (if skip-last then inline-nil else inline-fil)
   )
 
