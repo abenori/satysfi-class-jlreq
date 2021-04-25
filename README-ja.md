@@ -58,7 +58,7 @@ document(|
 そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やbool値（`true`または`false`）などのようなSATySFiで定義されているデータ型で多くの場合は指定しますが，次のような型も使います．
 
 * フォント：[satysfi-fssパッケージ](https://github.com/na4zagin3/satysfi-fss)のスタイルを指定します．`[bold;italic]`のように指定します．
-* `jlreq長さ`: ``~(jlreq-length `10pt`)``のように指定します．`1zw`のように指定することもでき，この場合は全角一文字分長さを表します．ただし，`@require: jlreq0`が必要です．
+* `jlreq長さ`: ``~(jlreq-length `10pt`)``のように指定します．``~(jlreq-length `1zw`)``のように指定することもでき，この場合は全角一文字分長さを表します．ただし，`@require: jlreq0`が必要です．
 
 
 ### 基本版面の設定
@@ -291,4 +291,9 @@ let-inline ctx \set-page-str f = JLReqPageNumber.set-page-format f
 
 ## 履歴
 * 0.0.1 (2020/03/22) 
-    - 最初のバージョン
+    - 最初のバージョン．
+* 0.0.2 (2021/04/25) 
+    - 定理環境の仕様を変更．
+    - >=3段組も指定できるようにした．
+    - jlreq長さの指定方法を変更．
+    - フォント管理をsatysfi-fssに委ねた．
