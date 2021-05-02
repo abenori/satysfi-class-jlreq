@@ -4,7 +4,6 @@
 [Satyrographos](https://github.com/na4zagin3/satyrographos)を使ってインストールができます．
 
 ```sh
-opam pin add https://github.com/abenori/satysfi-class-jlreq.git
 opam install satysfi-class-jlreq
 satyrographos install
 ```
