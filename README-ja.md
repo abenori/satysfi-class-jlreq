@@ -57,7 +57,7 @@ document(|
 そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やbool値（`true`または`false`）などのようなSATySFiで定義されているデータ型で多くの場合は指定しますが，次のような型も使います．
 
 * フォント：[satysfi-fssパッケージ](https://github.com/na4zagin3/satysfi-fss)のスタイルを指定します．`[bold;italic]`のように指定します．
-* `jlreq長さ`: ``~(jlreq-length `10pt`)``のように指定します．``~(jlreq-length `1zw`)``のように指定することもでき，この場合は全角一文字分長さを表します．ただし，`@require: jlreq0`が必要です．
+* `jlreq長さ`: ``~(jlreq-length @`10pt`)``のように指定します．``~(jlreq-length @`1zw`)``のように指定することもでき，この場合は全角一文字分長さを表します．ただし，`@require: jlreq0`が必要です．
 
 
 ### 基本版面の設定
@@ -81,7 +81,7 @@ document(|
 * `line-gap`: 行間を長さで指定します．デフォルト`7pt`．
 * `two-side`: `true`または`false`です．`true`とすると奇数ページと偶数ページで異なるデザインとなります．デフォルト`false`．
 * `column`: 整数値を指定します．`column = n;`とするとn段組になります．現在のところはnは1または2のみがサポートされています．デフォルト`1`．
-* `column-gap`: 段間をjlreq長さで指定します．デフォルト`ZW(2.0)`．
+* `column-gap`: 段間をjlreq長さで指定します．デフォルト``~(jlreq-length @`2.0zw`)``．
 * `horizontal-layout`: 横方向のレイアウトです．以下のどれかで設定します．デフォルト`HorizontalAuto`．
     - `HorizontalAuto`: 紙面の0.75倍がテキスト幅となるように中央配置．
     - `HorizontalCenter(<テキスト幅; jlreq長さ>)`: テキスト幅にあわせて中央配置．
@@ -92,8 +92,8 @@ document(|
     - `VertialCenter(<テキスト高さ; jlreq長さ>)`: テキスト高さが`l`となるように中央配置．
     - `Top(|block-length = <テキスト高さ; jlreq長さ>; top-space = <天の空き; jlreq長さ>;|)`: テキスト高さと天の空きから決定します．
     - `TopBottom(|top-space = <天の空き; jlreq長さ>; bottom-space = <地の空き; jlreq長さ>;|)`: 天と地の空きから決定します．
-* `header-sep`: ヘッダやフッタと本文との空きです．jlreq長さで指定します．デフォルト`ZW(1.0)`．
-* `header-height`: ヘッダやフッタの高さをjlreq長さで指定します．デフォルト`ZW(1.0)`．
+* `header-sep`: ヘッダやフッタと本文との空きです．jlreq長さで指定します．デフォルト``~(jlreq-length @`1.0zw`)``．
+* `header-height`: ヘッダやフッタの高さをjlreq長さで指定します．デフォルト``~(jlreq-length @`1.0zw`)``．
 * `font`: フォントの設定を行います．satysfi-fssパッケージにおけるフォントセットを指定します．
 
 ## ヘッダとフッタ
@@ -104,7 +104,7 @@ let page-style-headings = JLReqPageStyle.page-style-scheme (|
     (|
       position = PageStyleBottomCenter; % 場所はフッタの真ん中
       nombre = (fun pbinfo ps -> embed-string (ps)); % ノンブルの出力．ページ数をそのまま出力する．
-      font = Roman(ZW(0.8)); % フォント指定
+      font = [with-font-size (fun l -> l *' 0.8)]; % フォント指定
     |);
   ];
   running-head = [% 柱の指定
@@ -112,7 +112,7 @@ let page-style-headings = JLReqPageStyle.page-style-scheme (|
       position = PageStyleTopCenter; % 柱の場所はヘッダの中心
       odd = PageStyleFirstMark(JLReq.default-config-subsection#level); % 奇数ページには+subsectionの見出しを出力
       even = PageStyleBotMark(JLReq.default-config-section#level); % 偶数ページには+sectionの見出しを出力
-      font = Roman(ZW(0.8));
+      font = [with-font-size (fun l -> l *' 0.8)];
     |)
   ];
 |)
@@ -147,7 +147,7 @@ let-inline ctx \set-page-style ps = JLReqPageStyle.register-page-style-inline ps
 @require: jlreq/theorem
 let-mutable theorem-counter <- 0
 let-block ctx +theorem = JLReqTheorem.theorem-scheme (|JLReqTheorem.default-config-theorem with
-  font = Italic(1.0); 本文フォントをイタリックに
+  font = [italic]; 本文フォントをイタリックに
 |) {定理} theorem-counter ctx
 ```
 
