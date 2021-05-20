@@ -13,6 +13,8 @@ depends: [
   "satysfi-base" {>= "0.0.2"}
   "satysfi-fss" {>= "0.0.2"}
   "satyrographos" {>= "0.0.2"}
+  "satysfi-pagenumber" {>="1.0.0"}
+  "satysfi-pagestyle" {>="1.0.0"}
 ]
 build: [ ]
 install: [

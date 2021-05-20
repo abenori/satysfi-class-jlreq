@@ -1,7 +1,7 @@
 @require: fss/fss
 @require: fss/style
+@require: pagenumber/pagenumber
 @import: base
-@import: pagenum
 @import: paragraph
 @import: lib
 @import: jlreq0
@@ -45,7 +45,7 @@ end = struct
       | Some(l) -> 
         let () = register-cross-reference (l ^ `:num`) (config#label-format !counter) in
         let hookfunc pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
+          register-cross-reference (l ^ `:page`)  (PageNumber.get-page-string pbinfo#page-number)
         in
         hook-page-break hookfunc
     in

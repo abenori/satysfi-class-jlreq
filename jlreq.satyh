@@ -5,11 +5,11 @@
 @require: fss/fss
 @require: fss/style
 @require: fss/fonts
+@require: pagestyle/pagestyle
 @import: lib
 @import: base
 @import: heading
 @import: footnote
-@import: pagestyle
 @import: toc
 @import: theorem
 @import: paragraph
@@ -446,7 +446,7 @@ end = struct
     let () = if record#show-title then ref-no-float-pages <- 1 :: !ref-no-float-pages else () in
     let page-layout pbinfo =
       let (hofb,_) = height-of-float-boxes pbinfo in
-      let xpoint = get-left-margin (JLReqPageNumber.get-page-number pbinfo) in
+      let xpoint = get-left-margin (PageNumber.get-page-number pbinfo#page-number) in
       (|
         text-origin = (xpoint,top-space +' hofb);
         text-height = paper-height -' top-space -' bottom-space -' hofb;
@@ -458,15 +458,12 @@ end = struct
     |) in
     let pagestyle pbinfo = 
       let ctx = get-standard-context text-width in
-      let (h,f) = 
-        if config#two-side && ((JLReqPageNumber.get-page-number pbinfo) mod 2 == 0) then 
-          (JLReqPageStyle.even-header,JLReqPageStyle.even-footer)
-        else
-          (JLReqPageStyle.odd-header,JLReqPageStyle.odd-footer)
-      in
-      let hc = h ctx pbinfo (JLReqPageNumber.get-page-number-str pbinfo) in
-      let fc = f ctx pbinfo (JLReqPageNumber.get-page-number-str pbinfo) in
-      let xpoint = get-left-margin (JLReqPageNumber.get-page-number pbinfo) in
+      let (h,f) = (PageStyle.header config#two-side,PageStyle.footer config#two-side) in
+      let pn = PageNumber.get-page-number pbinfo#page-number in
+      let pstr = PageNumber.get-page-string pbinfo#page-number in
+      let hc = h ctx pbinfo in
+      let fc = f ctx pbinfo in
+      let xpoint = get-left-margin (PageNumber.get-page-number pbinfo#page-number) in
       % フロートボックスの構築
       let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in
       let (output-float-boxes,rest-float,_) = 

@@ -2,11 +2,11 @@
 @require: option
 @require: fss/fss
 @require: fss/style
+@require: pagenumber/pagenumber
+@require: pagestyle/mark
 @import: base
 @import: lib
-@import: mark
 @import: toc
-@import: pagenum
 @import: jlreq0
 
 type block-heading-gyodori = 
@@ -131,15 +131,15 @@ end = struct
       | Some(l) -> 
         let () = register-cross-reference (l ^ `:num`) (config#label-format !counter) in
         let hookfunc pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
+          register-cross-reference (l ^ `:page`)  (PageNumber.get-page-string pbinfo#page-number)
         in
         hook-page-break hookfunc
     in
     let tocheading = Option.from heading runninghead in
     let i-label = embed-string (config#label-format !counter) in
     let register-mark-box = 
-      List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
-       (JLReqMark.set-mark config#level (config#mark-format i-label tocheading))
+      List.fold-left (fun a b -> a ++ (Mark.set-mark b {}))
+       (Mark.set-mark config#level (config#mark-format i-label tocheading))
        config#clear-mark-levels
     in
     let toc-box = 
@@ -261,7 +261,7 @@ end = struct
       | Some(l) -> (
         let () = register-cross-reference (l ^ `:num`) (config#reference-label-format !counter) in
         let hook pbinfo pt =
-          register-cross-reference (l ^ `:page`)  (JLReqPageNumber.get-page-number-str pbinfo)
+          register-cross-reference (l ^ `:page`)  (PageNumber.get-page-string pbinfo#page-number)
         in
         hook-page-break hook
       )
@@ -269,8 +269,8 @@ end = struct
     let i-label = embed-string (config#label-format !counter) in
     let markhead = Option.from heading runhead in
     let mark-box = 
-      List.fold-left (fun a b -> a ++ (JLReqMark.set-mark b {}))
-       (JLReqMark.set-mark config#level (config#mark-format i-label markhead))
+      List.fold-left (fun a b -> a ++ (Mark.set-mark b {}))
+       (Mark.set-mark config#level (config#mark-format i-label markhead))
        config#clear-mark-levels
     in
     let toc-box = 

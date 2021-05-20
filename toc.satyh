@@ -1,9 +1,9 @@
 @require: list
 @require: fss/fss
 @require: fss/style
+@require: pagenumber/pagenumber
 @import: base
 @import: lib
-@import: pagenum
 
 module JLReqTOC : sig
   val add-contents-line : int -> string ?-> inline-text -> inline-boxes
@@ -20,7 +20,7 @@ end = struct
         let () = ref-tocs-counter <- !ref-tocs-counter + 1 in
         let label = `jlreq-toc-label-` ^ (arabic !ref-tocs-counter) in
         let p = get-cross-reference label in
-        let hook pbinfo _ = register-cross-reference label (JLReqPageNumber.get-page-number-str pbinfo) in
+        let hook pbinfo _ = register-cross-reference label (PageNumber.get-page-string pbinfo#page-number) in
         (p,hook-page-break hook)
       | Some(p) -> (Some(p),inline-nil)
     in
