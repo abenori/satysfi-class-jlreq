@@ -13,6 +13,7 @@
 @import: toc
 @import: theorem
 @import: paragraph
+@import: proof
 @import: jlreq0
 
 type kihon-hanmen-horizontal = 
@@ -108,6 +109,8 @@ module JLReq : sig
   val section-counter : int ref
   val subsection-counter : int ref
   val paragraph-counter : int ref
+  
+  direct +proof : [inline-text?; block-text] block-cmd
   
   direct \ref : [string] inline-cmd
   direct \ref-page : [string] inline-cmd
@@ -323,6 +326,35 @@ end = struct
     let ib = read-inline ctx it in
     let (w,_,_) = get-natural-metrics ib in
     line-break true (if Length.(w == 0pt) then false else true) ctx (JLReqParagraph.get-paragraph-boxes (| indent = ~(jlreq-length @`0pt`);|) ctx ib)
+  
+  %. 証明
+  let qedsymbol ctx =
+    let ib = read-inline ctx {阿} in
+    let (aw,h,d) = get-natural-metrics ib in
+    let w = aw *' 0.6 in
+    let xshift = 3pt in
+    inline-fil ++ 
+    (
+      inline-graphics (w +' xshift) h d (fun (x,y) ->
+        [
+          stroke 0.5pt Color.black 
+            (start-path (x +' xshift, y -' d) 
+              |> line-to (x +' xshift +' w, y -' d)
+              |> line-to (x +' xshift +' w, y +' h)
+              |> line-to (x +' xshift, y +' h)
+              |> close-with-line
+            );
+        ]
+      )
+    )
+
+  let default-config-proof = (|
+    qedsymbol = qedsymbol;
+    space-after-label = ~(jlreq-length @`1zw`);
+    proofname = {証明};
+    font-label = [bold];
+  |)
+  let-block ctx +proof = JLReqProof.proof-scheme ctx default-config-proof
   
   %. maketitle
   let maketitle ctx title author date =

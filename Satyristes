@@ -12,6 +12,7 @@
      (package "lib.satyh" "./lib.satyh")
      (package "paragraph.satyh" "./paragraph.satyh")
      (package "theorem.satyh" "./theorem.satyh")
+     (package "proof.satyh" "./proof.satyh")
      (package "toc.satyh" "./toc.satyh")))
   (opam "satysfi-class-jlreq.opam")
   (dependencies (

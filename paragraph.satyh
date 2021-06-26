@@ -1,10 +1,13 @@
 @require: base/length
+@require: base/list-ext
 @import: lib
 
 module JLReqParagraph : sig
   val set-paragraph-top-text : inline-boxes -> unit
   val get-paragraph-top-text : inline-boxes
-  val set-skip-last-fil : bool -> unit
+  val set-paragraph-end-text-before-skip : int -> inline-boxes -> unit
+  val set-paragraph-end-text-after-skip : int -> inline-boxes -> unit
+  val add-paragraph-hook : (inline-boxes -> unit) -> unit
   val get-paragraph-boxes : (|
     indent : (length -> (string -> length option) -> length);
   |) -> context -> inline-boxes -> inline-boxes
@@ -13,23 +16,38 @@ module JLReqParagraph : sig
 end = struct
 
 let-mutable ref-paragraph-text <- inline-nil
-let-mutable ref-skip-last-fil <- false
+let-mutable ref-paragraph-end-text-before-skip <- []
+let-mutable ref-paragraph-end-text-after-skip <- []
+let-mutable ref-paragraph-hook <- []
 
 let set-paragraph-top-text txt = ref-paragraph-text <- txt
-let set-skip-last-fil b = ref-skip-last-fil <- b
 let get-paragraph-top-text = !ref-paragraph-text
+let set-paragraph-end-text-before-skip n ib =
+  ref-paragraph-end-text-before-skip <- (n,ib) :: !ref-paragraph-end-text-before-skip
+let set-paragraph-end-text-after-skip n ib =
+  ref-paragraph-end-text-after-skip <- (n,ib) :: !ref-paragraph-end-text-after-skip
+let add-paragraph-hook h = ref-paragraph-hook <- h :: !ref-paragraph-hook
 
 let get-paragraph-boxes opt ctx txt =
 	let len = JLReqLib.get-length ctx opt#indent in
   let ib = !ref-paragraph-text in
   let () = ref-paragraph-text <- inline-nil in
-  let skip-last = !ref-skip-last-fil in
-  let () = ref-skip-last-fil <- false in
+  let (bstxt,bsrest) = List.fold-left (fun (t,r) (n,a) -> (
+    if n == 1 then (t ++ a,r)
+    else (t,(n - 1,a) :: r)
+  )) (inline-nil,[]) !ref-paragraph-end-text-before-skip in
+  let (astxt,asrest) = List.fold-left (fun (t,r) (n,a) -> (
+    if n == 1 then (t ++ a,r)
+    else (t,(n - 1,a) :: r)
+  )) (inline-nil,[]) !ref-paragraph-end-text-after-skip in
+  let () = ref-paragraph-end-text-before-skip <- bsrest in
+  let () = ref-paragraph-end-text-after-skip <- asrest in
+  let _ = List.map (fun f -> f ib) !ref-paragraph-hook in
   let (w,_,_) = get-natural-metrics ib in
   (
     (if Length.(w == 0pt) then (inline-skip len) else inline-nil)
-    ++ ib ++ txt
-    ++ (if skip-last then inline-nil else inline-fil)
+    ++ ib ++ txt 
+    ++ bstxt ++ inline-fil ++ astxt
   )
 
 end

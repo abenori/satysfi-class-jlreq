@@ -1,0 +1,51 @@
+@require: color
+@require: fss/fss
+@import: paragraph
+@import: lib
+
+
+module JLReqProof : sig
+  val proof-scheme : context -> 'a -> inline-text ?-> block-text -> block-boxes
+  constraint 'a :: (|
+    qedsymbol : context -> inline-boxes;
+    space-after-label : (length -> (string -> length option) -> length);
+    font-label : style list;
+    proofname : inline-text;
+  |)
+end = struct
+
+
+let-mutable ref-paragraph-number-counter <- -1
+let () = JLReqParagraph.add-paragraph-hook (fun _ -> (
+  if !ref-paragraph-number-counter >= 0 then
+    ref-paragraph-number-counter <- !ref-paragraph-number-counter + 1
+  else () ))
+
+let-mutable ref-proof-reference-counter <- 0
+let proof-scheme ctx config ?:label inner =
+  let () = ref-proof-reference-counter <- !ref-proof-reference-counter + 1 in
+  let ref-key = `jlreq-number-of-paragraph-in-proof` ^ (arabic !ref-proof-reference-counter) in
+  let lab = Option.from config#proofname label in
+  let ib = (read-inline ctx {\font-style (config#font-label) {#lab;}})
+    ++ (inline-skip (JLReqLib.get-length ctx config#space-after-label))
+  in
+  let () = JLReqParagraph.set-paragraph-top-text ib in
+  let number-of-paragraph-in-proof = (
+    match get-cross-reference ref-key with
+      | None -> 1
+      | Some(s) -> (match Int.of-string-opt s with
+        | None -> 1
+        | Some(n) -> n
+      )
+    )
+  in
+  let () = JLReqParagraph.set-paragraph-end-text-after-skip number-of-paragraph-in-proof (config#qedsymbol ctx) in
+  let () = ref-paragraph-number-counter <- 0 in
+  let bb = (read-block ctx inner) in
+  let () = register-cross-reference ref-key (arabic !ref-paragraph-number-counter) in
+  let () = ref-paragraph-number-counter <- -1 in
+  let space = (get-font-size ctx) *' 1.7 in
+  JLReqLib.set-margin ctx true true space space bb
+
+end
+
