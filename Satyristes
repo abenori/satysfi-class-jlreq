@@ -14,9 +14,9 @@
      (package "theorem.satyh" "./theorem.satyh")
      (package "toc.satyh" "./toc.satyh")))
   (opam "satysfi-class-jlreq.opam")
-  (dependencies ((
-    base ()
-    fss ()
-    pagenumber ()
-    pagestyle ()
-  ))))
+  (dependencies (
+    (base ())
+    (fss ())
+    (pagenumber ())
+    (pagestyle ())
+  )))
