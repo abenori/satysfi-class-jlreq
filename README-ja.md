@@ -179,6 +179,23 @@ let-block ctx +theorem = JLReqTheorem.theorem-scheme (|JLReqTheorem.default-conf
 * `label-format`: 定理番号の出力方法を指定します．例えば<節番号>.<定理番号>というようにしたければ，`+section`の番号を保持するカウンター`section-counter`を使い，`label-format = (fun cnt -> (arabic !JLReq.section-counter) ^ `.` ^ (arabic cnt));`とします．
 * `after-label-space`: 定理見出しと定理本文の間の空きをjlreq長さで指定します．
 
+## 証明
+証明を書くためのブロックコマンド`+proof`が定義されています．
+```
++proof <
+  +p{
+    まずXを証明する．これは定義から明らかである．
+    XよりYが従うので，このことより直ちにZが成り立つことがわかる．
+  }
+  +p{
+    一方補題からZはAと同値であった．
+    よってAが成り立つことが示された．
+  }
+>
+```
+
+
+
 ## 見出し
 新しい見出しを定義したり，すでに定義されている見出しを再定義したりすることができます．
 見出しの種類は別行見出しと同行見出しがあります．

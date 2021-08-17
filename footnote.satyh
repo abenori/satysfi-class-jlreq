@@ -115,7 +115,7 @@ end = struct
         let ita = embed-string (config#reference-mark-format !counter) in
         let rmb = read-inline cc {\font-style (config#font) {#ita;}} in
         let (len,_,_) = get-natural-metrics rmb in
-        let body = read-inline cc txt in
+        let body = read-inline cc {\font-style (config#font) {#txt;}} in
         line-break false false cc
         (
           (inline-skip (0pt -' second-indent)) ++

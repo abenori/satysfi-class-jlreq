@@ -86,10 +86,12 @@ module JLReq : sig
     |) -> config-document ?-> (|
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
       table-of-contents : context -> block-boxes -> block-boxes;
+      context : context -> context;
     |) ?-> block-text ?-> block-text -> document
   val default-format : (|
     maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     table-of-contents : context -> block-boxes -> block-boxes;
+    context : context -> context;
   |)
   val \hspace : [(length -> (string -> length option) -> length)] inline-cmd
   val float-scheme : (|
@@ -390,6 +392,7 @@ end = struct
   let default-format = (|
     maketitle = maketitle;
     table-of-contents = toc;
+    context = (fun c -> c);
   |)
   
   %. document
@@ -411,6 +414,7 @@ end = struct
         |> set-math-font `lmodern`
         |> set-hyphen-penalty 100
         |> set-min-gap-of-lines 0pt
+        |> formats#context
     in
 
     let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
