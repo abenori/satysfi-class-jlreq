@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "satysfi-class-jlreq"
-version: "0.0.2"
+version: "0.0.3"
 synopsis: "A document class for SATySFi"
 authors: "Noriyuki Abe"
 maintainer: "Noriyuki Abe"
@@ -9,12 +9,12 @@ bug-reports: "https://github.com/abenori/satysfi-class-jlreq/issues"
 dev-repo: "git+https://github.com/abenori/satysfi-class-jlreq.git"
 license: "BSD-2-Clause-FreeBSD"
 depends: [
-  "satysfi" {>= "0.0.6"}
-  "satysfi-base" {>= "0.0.2"}
-  "satysfi-fss" {>= "0.0.2"}
-  "satyrographos" {>= "0.0.2"}
-  "satysfi-pagenumber" {>="1.0.0"}
-  "satysfi-pagestyle" {>="1.0.0"}
+  "satysfi" {>= "0.0.6" & < "0.0.7"}
+  "satysfi-base" {>= "1.3.0" & < "1.5.0"}
+  "satysfi-fss" {>= "0.0.2" & < "0.3.0"}
+  "satyrographos" {>= "0.0.2" & < "0.0.3.0"}
+  "satysfi-pagenumber" {>="1.0.0" & < "2.0.0"}
+  "satysfi-pagestyle" {>="1.0.0" & < "2.0.0"}
 ]
 build: [ ]
 install: [
