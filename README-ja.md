@@ -57,7 +57,7 @@ document(|
 そのほか，いろいろと挙動のカスタマイズが可能です．設定は長さ（length型，`10pt`や`2mm`など）やbool値（`true`または`false`）などのようなSATySFiで定義されているデータ型で多くの場合は指定しますが，次のような型も使います．
 
 * フォント：[satysfi-fssパッケージ](https://github.com/na4zagin3/satysfi-fss)のスタイルを指定します．`[bold;italic]`のように指定します．
-* `jlreq長さ`: ``~(jlreq-length @`10pt`)``のように指定します．``~(jlreq-length @`1zw`)``のように指定することもでき，この場合は全角一文字分長さを表します．ただし，`@require: jlreq0`が必要です．
+* `jlreq長さ`: ``~(jlreq-length @`10pt`)``のように指定します．``~(jlreq-length @`1zw`)``のように指定することもでき，この場合は全角一文字分長さを表します．これの利用には`@require: jlreq0`が必要です．
 
 
 ### 基本版面の設定
@@ -97,49 +97,7 @@ document(|
 * `font`: フォントの設定を行います．satysfi-fssパッケージにおけるフォントセットを指定します．
 
 ## ヘッダとフッタ
-ヘッダとフッタに出力されるページ数や柱の指定を行います．ヘッダとフッタをあわせて，ページスタイルと呼びます．まずページスタイルををあらかじめ`JLreqPageStyle.page-style-scheme`を使い次のように作成しておきます．
-```
-let page-style-headings = JLReqPageStyle.page-style-scheme (|
-  nombre = [% ノンブルの指定
-    (|
-      position = PageStyleBottomCenter; % 場所はフッタの真ん中
-      nombre = (fun pbinfo ps -> embed-string (ps)); % ノンブルの出力．ページ数をそのまま出力する．
-      font = [with-font-size (fun l -> l *' 0.8)]; % フォント指定
-    |);
-  ];
-  running-head = [% 柱の指定
-    (|
-      position = PageStyleTopCenter; % 柱の場所はヘッダの中心
-      odd = PageStyleFirstMark(JLReq.default-config-subsection#level); % 奇数ページには+subsectionの見出しを出力
-      even = PageStyleBotMark(JLReq.default-config-section#level); % 偶数ページには+sectionの見出しを出力
-      font = [with-font-size (fun l -> l *' 0.8)];
-    |)
-  ];
-|)
-```
-ページスタイルの適用は，プリアンブルにて
-```
-register-page-style page-style-headins
-```
-とします．また，文書中で変更したい場合は，次のように定義した`\set-page-style`を使いこのページスタイルを適用します．
-```
-let-inline ctx \set-page-style ps = JLReqPageStyle.register-page-style-inline ps
-
-....
-<本文内>
-+p{...
-  \set-page-style(page-style-headings);% このページ以降上で定義したヘッダとフッタが出力される
-   ...
-}
-```
-
-上のように，`JlreqPageStyle.page-style-scheme`ではノンブルと柱を独立に設定します．複数のノンブル，柱を設定することができ，各々リストで渡します．各設定では以下を使います．
-* `position`: ノンブル，柱共通です．`PageStyleBottomCenter`，`PageStyleBottomLeft`，`PageStyleBottomRight`，`PageStyleTopCenter`，`PageStyleTopLeft`，`PageStyleTopRight`の六カ所から選びます．
-* `font`: ノンブル，柱共通です．フォントを指定します．
-* `nombre`: ノンブル用です．ノンブルの出力を指定します．二つの引数を受け取り`inline-text`を返す関数を設定します．引数の二つ目は`string`型のページ数です．一つ目の引数は`(|page-number : int;|)`という型です．ここでの`page-number`はPDFの1ページ目から数えたページ数で，実際に出力されるページ数（これは第二引数で取得できる）とは異なることがあります．
-* `odd`: 柱用です．奇数ページの柱を指定します．`+section`のような見出しの中身の出力を設定できます．見出しにはレベルが設定されていて，このレベルを使い設定を行います．`+section`のデフォルトの設定は`JLReq.default-config-section`に入っていて，そのレベルは`JLReq.default-config-section#level`で参照できます．`+part`，`+subsection`．`+paragraph`もすべて同様です．ここの設定は，`PageStyleFirstMark(<見出しレベル>)`，`PageStyleBotMark(<見出しレベル>)`，`PageStyleTopMark(<見出しレベル>)`のいずれかを指定します．それぞれ，該当ページの最初の見出し，最後の見出しおよび前ページの最後の見出しに対応します．または，`PageStyleFormat(f)`とすると，`f`の戻り値が出力されます．ただし，`f`は`(|page-number; int;|)`とページ数（`string`）を受け取り`inline-text`を返す関数です．引数の意味については`nombre`と同じです．
-* `even`: 偶数ページの柱です．ただし，`document`関数で`two-side = false;`が指定されている場合は，この項目は無視され，ページによらず`odd`で指定した柱が出力されます．
-
+ヘッダとフッタに出力されるページ数や柱の指定を行います．ヘッダとフッタをあわせて，ページスタイルと呼びます．[PageStyle](https://github.com/abenori/satysfi-pagestyle)の機能を使っていますのでそちらをご覧ください．
 
 ## 定理
 プリアンブルに次のように書くことで，定理を出力する命令`+theorem`を定義することができます．
@@ -294,16 +252,7 @@ document(|
 * `JLReq.footnote-counter`: `\footnote`用カウンタ．mutable．
 
 ## ページ数制御
-文書途中でページ数の変更などを行うことができます．
-```
-let-inline ctx \set-page pn = JLReqPageNumber.set-page-number pn
-```
-として定義した`\set-page`を使い，`\set-page(100)`とするとそこから100ページ目となります．出力はデフォルトではアラビア数字ですが，
-```
-let roman n = <整数値nをローマ数字のstring型として出力する関数>
-let-inline ctx \set-page-str f = JLReqPageNumber.set-page-format f
-```
-として，`\set-page-str(roman);`とするとそこからローマ数字として出力されるようになります．
+文書途中でページ数の変更などを行うことができます．[PageNumber](https://github.com/abenori/satysfi-pagenumber)の機能を使っていますので，そちらをご覧ください．
 
 ## 履歴
 * 0.0.1 (2020/03/22) 
@@ -313,3 +262,6 @@ let-inline ctx \set-page-str f = JLReqPageNumber.set-page-format f
     - >=3段組も指定できるようにした．
     - jlreq長さの指定方法を変更．
     - フォント管理をsatysfi-fssに委ねた．
+* 0.0.3 ()
+    - ページスタイルとページ数管理をpagestyle，pagenumberに分離．
+    - `+proof`を追加．
