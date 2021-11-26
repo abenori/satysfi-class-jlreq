@@ -66,7 +66,7 @@ document(|
 document(|
  ....
 |) ?:(|JLReq.default-config-document with % jlreqのデフォルト設定をもとにする
-  paper = A5Paper;% 紙サイズをA5にする．
+  paper-size = A5Paper;% 紙サイズをA5にする．
   font-size = 11pt;% フォントサイズを11ptにする．
 |) `<
   ...
@@ -76,7 +76,7 @@ document(|
 のようにします．（上の前付がある例では省略されていました．）
 以下の項目が設定可能です．
 
-* `paper`: 紙サイズです．`A0Paper`，`A1Paper`，`A2Paper`，`A3Paper`，`A4Paper`，`A5Paper`，`USLegal`，`USLetter`の他，`UserDefinedPaper(<横幅>,<縦の長さ>)`のように具体的な値を指定することもできます．デフォルト`A4Paper`．
+* `paper-size`: 紙サイズです．`A0Paper`，`A1Paper`，`A2Paper`，`A3Paper`，`A4Paper`，`A5Paper`，`USLegal`，`USLetter`の他，`UserDefinedPaper(<横幅>,<縦の長さ>)`のように具体的な値を指定することもできます．デフォルト`A4Paper`．
 * `font-size`: フォントのサイズを長さで指定します．デフォルト`10pt`．
 * `line-gap`: 行間を長さで指定します．デフォルト`7pt`．
 * `two-side`: `true`または`false`です．`true`とすると奇数ページと偶数ページで異なるデザインとなります．デフォルト`false`．
