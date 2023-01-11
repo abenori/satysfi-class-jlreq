@@ -87,11 +87,13 @@ module JLReq : sig
       maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
       table-of-contents : context -> block-boxes -> block-boxes;
       context : context -> context;
+      header-footer-context : context -> context;
     |) ?-> block-text ?-> block-text -> document
   val default-format : (|
     maketitle : context -> inline-text -> inline-text -> inline-text -> block-boxes;
     table-of-contents : context -> block-boxes -> block-boxes;
     context : context -> context;
+    header-footer-context : context -> context;
   |)
   val \hspace : [(length -> (string -> length option) -> length)] inline-cmd
   val float-scheme : (|
@@ -393,6 +395,7 @@ end = struct
     maketitle = maketitle;
     table-of-contents = toc;
     context = (fun c -> c);
+    header-footer-context = (fun c -> c);
   |)
   
   %. document
@@ -404,7 +407,7 @@ end = struct
   let document record ?:configopt ?:formatopt ?:frontmatter inner =
     let config = Option.from default-config-document configopt in
     let formats = Option.from default-format formatopt in
-    let get-standard-context width = 
+    let get-default-context width =
       get-initial-context width (command \math) 
         |> set-dominant-wide-script Kana
         |> set-language Kana Japanese
@@ -414,8 +417,9 @@ end = struct
         |> set-math-font `lmodern`
         |> set-hyphen-penalty 100
         |> set-min-gap-of-lines 0pt
-        |> formats#context
     in
+    let get-standard-context width = get-default-context width |> formats#context in
+    let get-hf-context width = get-default-context width |> formats#header-footer-context in
 
     let (paper-width,paper-height) = paper-size-to-width-height config#paper-size in
     % 30cmに意味はない
@@ -441,7 +445,8 @@ end = struct
         (gutter,fore-edge)
     in
     % 1.0ptはおまじない……
-    let text-width = (paper-width -' odd-left-margin -' odd-right-margin +' 1.0pt -' (column-gap *' (float (config#column - 1)))) *' (1.0 /. (float config#column)) in
+    let document-width = paper-width -' odd-left-margin -' odd-right-margin +' 1.0pt in
+    let text-width = (document-width -' (column-gap *' (float (config#column - 1)))) *' (1.0 /. (float config#column)) in
     let (top-space,bottom-space) = 
       match config#vertical-layout with
       | VerticalAuto -> (paper-height *' 0.125,paper-height *' 0.125)
@@ -494,11 +499,12 @@ end = struct
     |) in
     let pagestyle pbinfo = 
       let ctx = get-standard-context text-width in
+      let ctx-hf = get-hf-context document-width in
       let (h,f) = (PageStyle.header config#two-side,PageStyle.footer config#two-side) in
       let pn = PageNumber.get-page-number pbinfo#page-number in
       let pstr = PageNumber.get-page-string pbinfo#page-number in
-      let hc = h ctx pbinfo in
-      let fc = f ctx pbinfo in
+      let hc = h ctx-hf pbinfo in
+      let fc = f ctx-hf pbinfo in
       let xpoint = get-left-margin (PageNumber.get-page-number pbinfo#page-number) in
       % フロートボックスの構築
       let (_,number-of-float-boxes) = height-of-float-boxes pbinfo in
