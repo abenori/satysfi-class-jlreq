@@ -472,7 +472,7 @@ end = struct
     let height-of-float-boxes pbinfo =
       if is-no-float-page pbinfo then (0pt,0)
       else
-        (!ref-float-boxes) |> List.fold-left (fun (h,n) (pn, bb) -> (
+        (!ref-float-boxes) |> List.fold-right (fun (pn, bb) (h,n) -> (
           if pn > pbinfo#page-number then (h,n)
           else
             let hh = h +' (get-natural-length bb) +' (float-margin config#font-size) in
